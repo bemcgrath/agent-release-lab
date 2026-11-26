@@ -10,6 +10,7 @@ AI evaluates and recommends. Deterministic controls enforce. Authorized humans r
 - A smoke test and automated Python validation on Windows and Linux.
 - Architecture and governance contracts, a research plan, and 22 labeled synthetic scenarios documented for future experiments.
 - Python interfaces for strict manifest and evaluation suite registration, evidence binding and integrity checks, and classified release comparisons. The [release manifest contract](docs/RELEASE_MANIFEST.md) documents the interfaces.
+- Local HTTP endpoints for the registries, release comparison, and evidence verification. See the [HTTP API](docs/API.md) for requests, responses, and database configuration.
 
 ## Planned capabilities
 
@@ -35,6 +36,7 @@ With the server running, open `http://127.0.0.1:8000/health` to check that it re
 - [Product requirements](docs/PRODUCT_REQUIREMENTS.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Release manifest](docs/RELEASE_MANIFEST.md)
+- [HTTP API](docs/API.md)
 - [Governance policy](docs/GOVERNANCE_POLICY.md)
 - [Evaluation strategy](docs/EVALUATION_STRATEGY.md)
 - [Security model](docs/SECURITY_MODEL.md)

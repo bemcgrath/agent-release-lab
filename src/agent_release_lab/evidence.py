@@ -4,9 +4,12 @@ import re
 from datetime import datetime, timezone
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, Field, JsonValue, StringConstraints, field_validator
+from pydantic import (
+    AwareDatetime, Field, JsonValue, SerializerFunctionWrapHandler, StringConstraints,
+    field_validator, model_serializer,
+)
 
-from .identity import Digest, Identifier, Record, Revision, canonical_json, sha256
+from .identity import Digest, Identifier, Record, Revision, VersionedRecord, canonical_json, sha256
 from .manifests import Pin
 
 
@@ -16,7 +19,8 @@ class Dataset(Record):
     digest: Digest
 
 
-class EvaluationSuite(Record):
+class EvaluationSuite(VersionedRecord):
+    schema_version: Literal[0, 1] = 0
     id: Identifier
     revision: Revision
     checks: dict[Identifier, Revision] = Field(min_length=1)
@@ -31,12 +35,20 @@ class EvaluationSuite(Record):
         canonical_json(settings)
         return settings
 
+    @model_serializer(mode="wrap")
+    def serialize_version(self, handler: SerializerFunctionWrapHandler) -> dict:
+        payload = handler(self)
+        if self.schema_version == 0:
+            payload.pop("schema_version", None)
+        return payload
+
     @property
     def fingerprint(self) -> str:
         return sha256(self.canonical_bytes())
 
 
-class Evidence(Record):
+class Evidence(VersionedRecord):
+    schema_version: Literal[1] = 1
     id: Identifier
     candidate_fingerprint: Digest
     suite_fingerprint: Digest
@@ -55,7 +67,7 @@ class Evidence(Record):
     def require_explicit_offset(cls, value: object) -> object:
         if not isinstance(value, str):
             return value
-        if not re.search(r"(?:[zZ]|[+-][0-9]{2}:?[0-9]{2})\Z", value):
+        if not re.search(r"(?:[zZ]|[+-](?:[01][0-9]|2[0-3]):?[0-5][0-9])\Z", value):
             raise ValueError("Evidence timestamp requires an explicit UTC offset")
         if value.endswith("z"):
             value = value[:-1] + "Z"
@@ -64,7 +76,14 @@ class Evidence(Record):
     @field_validator("executed_at")
     @classmethod
     def normalize_time(cls, value: datetime) -> datetime:
-        return value.astimezone(timezone.utc)
+        try:
+            return value.astimezone(timezone.utc)
+        except OverflowError as error:
+            raise ValueError("Evidence timestamp is outside the supported UTC range") from error
+
+    @property
+    def fingerprint(self) -> str:
+        return sha256(self.canonical_bytes())
 
 
 class EvidenceMismatch(ValueError):

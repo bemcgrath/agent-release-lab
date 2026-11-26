@@ -29,3 +29,6 @@
 - Hash compact canonical UTF-8 JSON with SHA-256. Include schema defaults and preserve array order and Unicode text. Represent fractional settings with decimal strings to avoid platform-dependent float representations.
 - Store canonical records and inert artifact bytes in SQLite. Manifest fingerprints identify deployments, suite IDs and revisions identify immutable suite definitions, and evidence IDs identify individual runs.
 - Apply the version 1 field mapping to deployment comparisons. Compare governance snapshots independently so governance changes preserve deployment identity.
+- Keep the existing manifest schema and legacy suite fingerprints readable. Introduce manifest schema 2 for hashed operating scope and explicit schema version 1 for new HTTP suite and evidence submissions.
+- Store and independently recompute the complete evidence record fingerprint. Require callers to supply a retained fingerprint for HTTP verification. Keep legacy rows without registration fingerprints and fail their verification.
+- Use raw JSON intake for HTTP requests so duplicate keys reach the strict parser. Keep artifact bytes inert and expose integrity checks through the local API.

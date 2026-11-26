@@ -2,9 +2,11 @@
 
 from typing import Literal, Self
 
-from pydantic import Field, JsonValue, field_validator, model_validator
+from pydantic import (
+    Field, JsonValue, SerializerFunctionWrapHandler, field_validator, model_serializer, model_validator,
+)
 
-from .identity import Digest, Identifier, Record, Revision, canonical_json, sha256
+from .identity import Digest, Identifier, Record, Revision, VersionedRecord, canonical_json, sha256
 
 
 class Pin(Record):
@@ -41,19 +43,44 @@ class Components(Record):
     business_rules: Pin
 
 
-class Manifest(Record):
-    schema_version: Literal[1]
+class OperatingBoundaries(Record):
+    allowed_tools: list[Identifier]
+    allowed_data_sources: list[Identifier]
+    allowed_destinations: list[Identifier]
+    can_write: bool
+
+
+class AgentScope(Record):
+    purpose: Identifier
+    allowed_tasks: list[Identifier] = Field(min_length=1)
+    boundaries: OperatingBoundaries
+
+
+class Manifest(VersionedRecord):
+    schema_version: Literal[1, 2]
     agent_id: Identifier
     components: Components
     runtime: dict[Identifier, JsonValue] = Field(default_factory=dict)
     security: dict[Identifier, JsonValue] = Field(default_factory=dict)
+    scope: AgentScope | None = None
 
-    @field_validator("schema_version", mode="before")
-    @classmethod
-    def check_version_type(cls, value: object) -> object:
-        if type(value) is not int:
-            raise ValueError("schema_version must be an integer")
-        return value
+    @model_validator(mode="after")
+    def check_scope(self) -> Self:
+        if self.schema_version == 1 and "scope" in self.model_fields_set:
+            raise ValueError("Scope requires manifest schema version 2")
+        if self.schema_version == 2:
+            if self.scope is None:
+                raise ValueError("Manifest schema version 2 requires scope")
+            if set(self.scope.boundaries.allowed_tools) - self.components.tools.keys():
+                raise ValueError("Scope allows tools missing from the component map")
+        return self
+
+    @model_serializer(mode="wrap")
+    def serialize_version(self, handler: SerializerFunctionWrapHandler) -> dict:
+        payload = handler(self)
+        if self.schema_version == 1:
+            payload.pop("scope", None)
+        return payload
 
     @field_validator("runtime", "security")
     @classmethod

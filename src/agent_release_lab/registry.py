@@ -1,12 +1,12 @@
 """SQLite registries for immutable Phase 1 records and evidence artifacts."""
 
 import sqlite3
-from contextlib import closing, contextmanager
 from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from pathlib import Path
 
 from .comparison import ManifestComparison, compare_manifests
-from .evidence import EvaluationSuite, Evidence, verify_evidence
+from .evidence import EvaluationSuite, Evidence, EvidenceMismatch, verify_evidence
 from .identity import sha256
 from .manifests import Manifest
 
@@ -19,13 +19,18 @@ class RecordMissing(LookupError):
     """The registry has no record with the requested identity."""
 
 
+class RecordIntegrityError(EvidenceMismatch):
+    """Stored evidence metadata differs from its registration fingerprint."""
+
+
 class Registry:
     def __init__(self, path: str | Path):
         if str(path) in {"", ":memory:"}:
             raise ValueError("Provide a SQLite file path")
-        self.path = path
+        self.path = Path(path).resolve()
         with self._connect() as connection:
             connection.executescript("""
+                BEGIN IMMEDIATE;
                 CREATE TABLE IF NOT EXISTS manifests (
                     fingerprint TEXT PRIMARY KEY NOT NULL,
                     payload BLOB NOT NULL
@@ -42,9 +47,13 @@ class Registry:
                     candidate_fingerprint TEXT NOT NULL REFERENCES manifests(fingerprint),
                     suite_fingerprint TEXT NOT NULL REFERENCES suites(fingerprint),
                     payload BLOB NOT NULL,
-                    artifact BLOB NOT NULL
+                    artifact BLOB NOT NULL,
+                    record_fingerprint TEXT NOT NULL
                 );
             """)
+            columns = {column[1] for column in connection.execute("PRAGMA table_info(evidence)")}
+            if "record_fingerprint" not in columns:
+                connection.execute("ALTER TABLE evidence ADD COLUMN record_fingerprint TEXT")
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -106,39 +115,72 @@ class Registry:
             raise RecordConflict(f"Stored suite fingerprint differs from {fingerprint}")
         return suite
 
-    def register_evidence(self, evidence: Evidence, artifact: bytes) -> None:
+    def register_evidence(self, evidence: Evidence, artifact: bytes) -> str:
         evidence = Evidence.from_json(evidence.canonical_bytes())
         candidate = self.get_manifest(evidence.candidate_fingerprint)
         suite = self.get_suite(evidence.suite_fingerprint)
         verify_evidence(evidence, candidate_fingerprint=candidate.fingerprint, suite=suite, artifact=artifact)
         payload = evidence.canonical_bytes()
+        fingerprint = sha256(payload)
         with self._connect() as connection:
             connection.execute(
-                "INSERT INTO evidence VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
-                (evidence.id, evidence.candidate_fingerprint, evidence.suite_fingerprint, payload, artifact),
+                "INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+                (evidence.id, evidence.candidate_fingerprint, evidence.suite_fingerprint,
+                 payload, artifact, fingerprint),
             )
             stored = connection.execute(
-                "SELECT payload, artifact FROM evidence WHERE id = ?", (evidence.id,)
+                "SELECT payload, artifact, record_fingerprint FROM evidence WHERE id = ?", (evidence.id,)
             ).fetchone()
-            if stored != (payload, artifact):
+            if stored != (payload, artifact, fingerprint):
                 raise RecordConflict(f"Evidence ID {evidence.id} already exists")
+        return fingerprint
+
+    def get_evidence(self, evidence_id: str) -> tuple[Evidence, bytes]:
+        evidence, artifact = self._read_evidence(evidence_id)
+        self._verify_binding(evidence, artifact, evidence.candidate_fingerprint, evidence.suite_fingerprint)
+        return evidence, artifact
 
     def get_verified_evidence(
-        self, evidence_id: str, *, candidate_fingerprint: str, suite_fingerprint: str
+        self, evidence_id: str, *, candidate_fingerprint: str, suite_fingerprint: str,
+        expected_record_fingerprint: str | None = None,
     ) -> tuple[Evidence, bytes]:
+        evidence, artifact = self._read_evidence(evidence_id)
+        if expected_record_fingerprint is not None and evidence.fingerprint != expected_record_fingerprint:
+            raise EvidenceMismatch("Evidence record does not match the expected fingerprint")
+        self._verify_binding(evidence, artifact, candidate_fingerprint, suite_fingerprint)
+        return evidence, artifact
+
+    def _read_evidence(self, evidence_id: str) -> tuple[Evidence, bytes]:
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT payload, artifact FROM evidence WHERE id = ?", (evidence_id,)
+                """SELECT payload, artifact, record_fingerprint, candidate_fingerprint, suite_fingerprint
+                   FROM evidence WHERE id = ?""", (evidence_id,)
             ).fetchone()
         if row is None:
             raise RecordMissing(f"Unknown evidence {evidence_id}")
-        evidence = Evidence.from_json(row[0])
-        if evidence.id != evidence_id:
-            raise RecordConflict(f"Stored evidence ID differs from {evidence_id}")
+        payload, artifact, fingerprint, candidate, suite = row
+        if fingerprint is None:
+            raise RecordIntegrityError("Legacy evidence has no registration fingerprint")
+        if not isinstance(payload, bytes) or sha256(payload) != fingerprint:
+            raise RecordIntegrityError("Stored evidence record fingerprint mismatch")
+        if not isinstance(artifact, bytes):
+            raise RecordIntegrityError("Stored evidence artifact is not binary")
+        try:
+            evidence = Evidence.from_json(payload)
+        except ValueError as error:
+            raise RecordIntegrityError("Stored evidence record is invalid") from error
+        if (evidence.fingerprint, evidence.id, evidence.candidate_fingerprint, evidence.suite_fingerprint) != (
+            fingerprint, evidence_id, candidate, suite
+        ):
+            raise RecordIntegrityError("Stored evidence metadata differs from its registry entry")
+        return evidence, artifact
+
+    def _verify_binding(
+        self, evidence: Evidence, artifact: bytes, candidate_fingerprint: str, suite_fingerprint: str
+    ) -> None:
         candidate = self.get_manifest(candidate_fingerprint)
         suite = self.get_suite(suite_fingerprint)
-        verify_evidence(evidence, candidate_fingerprint=candidate.fingerprint, suite=suite, artifact=row[1])
-        return evidence, row[1]
+        verify_evidence(evidence, candidate_fingerprint=candidate.fingerprint, suite=suite, artifact=artifact)
 
     def compare(self, baseline_fingerprint: str, candidate_fingerprint: str) -> ManifestComparison:
         return compare_manifests(
