@@ -4,15 +4,16 @@ An open-source research project for evaluating how organizations govern and appr
 
 AI evaluates and recommends. Deterministic controls enforce. Authorized humans retain accountability.
 
-## Implemented in Phase 0
+## Implemented
 
 - An installable Python 3.12 package with a local FastAPI service exposing `GET /health`.
 - A smoke test and automated Python validation on Windows and Linux.
 - Architecture and governance contracts, a research plan, and 22 labeled synthetic scenarios documented for future experiments.
+- Python interfaces for strict manifest and evaluation suite registration, evidence binding and integrity checks, and classified release comparisons. The [release manifest contract](docs/RELEASE_MANIFEST.md) documents the interfaces.
 
 ## Planned capabilities
 
-The [roadmap](docs/ROADMAP.md) covers manifest, suite and evidence registries, deterministic governance and human approval, AI-assisted review, a dashboard, and an experiment runner.
+The [roadmap](docs/ROADMAP.md) covers deterministic governance and human approval, AI-assisted review, a dashboard, and an experiment runner.
 
 ## Run locally on Windows
 
@@ -23,6 +24,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[test]"
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -m compileall -q src tests
 .\.venv\Scripts\python.exe -m uvicorn agent_release_lab.main:app
 ```
 
