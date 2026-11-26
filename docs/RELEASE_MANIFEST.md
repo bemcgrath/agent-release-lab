@@ -2,7 +2,17 @@
 
 A manifest identifies one release configuration. The proposed v1 identity payload includes a schema version, fictional agent ID and a component mapping with required keys for model, prompt, harness, tools and business rules. Each component has a stable ID and an immutable revision or SHA-256 digest. A mutable model alias alone cannot establish a verifiable identity. Tool entries pin their interface and executable/configuration revisions. Prompts, harness settings and runtime parameters that affect behavior belong in the identity.
 
-Parse the input into a strict typed payload before hashing. Reject unknown or duplicate keys, missing pins and ambiguous scalar types. Phase 1 should specify a canonical UTF-8 JSON encoding and golden vectors. Hash the canonical bytes with SHA-256 to obtain the candidate fingerprint. Human labels, timestamps and the selected comparison baseline are record metadata outside the hash. Any identity field change produces a new candidate fingerprint. Identical registration is idempotent.
+Parse the input into a strict typed payload before hashing. Reject unknown or duplicate keys, missing pins and ambiguous scalar types. Hash the canonical bytes with SHA-256 to obtain the candidate fingerprint. Human labels, timestamps and the selected comparison baseline are record metadata outside the hash. Any identity field change produces a new candidate fingerprint. Identical registration is idempotent.
+
+### Canonical format and Python interfaces
+
+Use `Manifest.from_json`, `EvaluationSuite.from_json` and `Evidence.from_json` for submitted JSON. These constructors reject duplicate keys at every nesting level. The version 1 encoding serializes the validated model with defaults included, keys sorted by Unicode code point, compact JSON separators, and UTF-8 encoding without a BOM or trailing newline. Unicode text is preserved without normalization. Array order is significant. Use integer values or explicit decimal strings for fractional settings and thresholds. Evidence timestamps must include an offset and are normalized to UTC. SHA-256 digests use 64 lowercase hexadecimal characters. Tests pin manifest and suite golden fingerprints.
+
+The deployed tool map is keyed by tool ID. Each tool pins its interface, executable and configuration, and records effective permissions and security settings. The manifest also records runtime and security settings that apply to the agent as a whole. The importer rejects common mutable revision aliases. Producers must supply immutable provider references or verified digests because the local registry cannot establish whether a provider reuses a revision label.
+
+`Registry` in `agent_release_lab.registry` opens a SQLite file. Register manifests and suites first to obtain fingerprints. Then register evidence with the original artifact bytes and recover it with `get_verified_evidence`, supplying the expected candidate and suite fingerprints. Changes to a registered suite ID and revision or evidence ID require a new revision or ID. Use `Registry.compare` to compare stored manifests by fingerprint. Use `compare_manifests` with paired metadata and `compare_governance` with two snapshots for administrative and governance changes. Classification mapping version 1 treats effective tool permission changes as both permission and security changes.
+
+Registry verification checks binding, suite membership and artifact integrity. Phase 2 owns trust, freshness, accepted-suite policy selection and release authorization.
 
 ## Evidence contract
 
