@@ -1,5 +1,6 @@
 """Independent evaluation suites and evidence bound to deployment and suite."""
 
+import re
 from datetime import datetime, timezone
 from typing import Annotated, Literal
 
@@ -48,6 +49,17 @@ class Evidence(Record):
     artifact_digest: Digest
     producer: Identifier
     source: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+    @field_validator("executed_at", mode="before")
+    @classmethod
+    def require_explicit_offset(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        if not re.search(r"(?:[zZ]|[+-][0-9]{2}:?[0-9]{2})\Z", value):
+            raise ValueError("Evidence timestamp requires an explicit UTC offset")
+        if value.endswith("z"):
+            value = value[:-1] + "Z"
+        return datetime.fromisoformat(value)
 
     @field_validator("executed_at")
     @classmethod

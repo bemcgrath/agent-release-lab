@@ -12,8 +12,11 @@ Digest = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 
 
 def _reject_alias(value: str) -> str:
-    if value.casefold().rsplit(":", 1)[-1] in {"latest", "stable", "default", "main", "head"}:
-        raise ValueError("Resolve mutable aliases to immutable revisions before registration")
+    reference = value.casefold().rsplit(":", 1)[-1]
+    if reference in {"latest", "stable", "default", "main", "head"} or reference.startswith(
+        ("refs/heads/", "refs/remotes/")
+    ):
+        raise ValueError("Resolve mutable aliases and branch references before registration")
     return value
 
 

@@ -68,6 +68,33 @@ def test_strict_manifest_intake(manifest_data):
             Manifest.model_validate(manifest_data)
 
 
+@pytest.mark.parametrize("revision", ["refs/heads/main", "refs/heads/topic", "git:refs/remotes/origin/topic"])
+def test_manifest_rejects_mutable_branch_pins(manifest_data, revision):
+    manifest_data["components"]["model"]["revision"] = revision
+    with pytest.raises(ValidationError, match="mutable"):
+        Manifest.from_json(json.dumps(manifest_data))
+
+
+@pytest.mark.parametrize("executed_at", ["1767225600", "2026-01-01T00:00:00"])
+def test_evidence_timestamp_requires_explicit_offset(suite_data, executed_at):
+    data = {
+        "id": "ledger-run-001",
+        "candidate_fingerprint": "a" * 64,
+        "suite_fingerprint": "b" * 64,
+        "check_id": "regression",
+        "check_revision": "r1",
+        "dataset": suite_data["dataset"],
+        "runner": suite_data["runner"],
+        "executed_at": executed_at,
+        "result": "passed",
+        "artifact_digest": "c" * 64,
+        "producer": "synthetic-runner",
+        "source": "Synthetic fixture",
+    }
+    with pytest.raises(ValidationError, match="explicit UTC offset"):
+        Evidence.from_json(json.dumps(data))
+
+
 @pytest.mark.parametrize("field", ["model", "prompt", "harness", "business_rules", "tools"])
 def test_component_change_changes_fingerprint(manifest_data, field):
     baseline = Manifest.model_validate(manifest_data)
@@ -157,6 +184,7 @@ def test_evidence_binding_and_integrity_after_reopen(tmp_path, manifest_data, su
         "source": "Synthetic fixture",
     }
     evidence = Evidence.from_json(json.dumps(data))
+    assert evidence.executed_at.isoformat() == "2026-01-01T10:00:00+00:00"
     with pytest.raises(EvidenceMismatch, match="digest mismatch"):
         registry.register_evidence(evidence, b"tampered")
     with pytest.raises(EvidenceMismatch, match="check revision"):
