@@ -18,3 +18,29 @@ Python 3.12 hosts FastAPI with Pydantic input and output contracts. The planned 
 The assessment pins candidate, policy revision and evidence inventory. The reviewer receives a read-only view of that snapshot. The adapter accepts structured context and returns advisory findings, provider/model identifiers, timing and usage. A deterministic fake supports local integration tests. Advisory outputs have no registry, gate or approval write privileges.
 
 Approval rechecks gate inputs and active policy inside the same transaction as the decision and audit write. A policy change or required evidence change calls for reassessment. Use [manifest](RELEASE_MANIFEST.md), [policy](GOVERNANCE_POLICY.md) and [security](SECURITY_MODEL.md) contracts for implementation details.
+
+## Target repository layout
+
+Phase 0 establishes the root documentation and packaging files, `docs/`, the `src/agent_release_lab/` package with its FastAPI entry point, and `tests/`. Add the remaining directories with their first implementation as the [roadmap](ROADMAP.md) progresses.
+
+```text
+agent-release-lab/
+├── README.md                 Windows setup and project overview
+├── AGENTS.md                 Repository instructions
+├── pyproject.toml            Package metadata, dependencies and pytest settings
+├── .gitignore
+├── docs/                     Product, architecture and research specifications
+├── src/agent_release_lab/
+│   ├── __init__.py
+│   ├── main.py               FastAPI entry point
+│   ├── manifests/            Candidate identity, registry and comparison
+│   ├── policies/             Versioned policies and deterministic checks
+│   ├── evidence/             Evidence registration and verification
+│   ├── reviewers/            Advisory reviewers and provider adapters
+│   └── experiments/          Benchmark execution and scoring
+├── schemas/                  Versioned contracts shared with external consumers
+├── fixtures/                 Synthetic cases shared by tests and experiments
+├── tests/                    Automated validation
+├── web/                      Local HTML, CSS and JavaScript dashboard
+└── .github/workflows/        Continuous integration
+```

@@ -13,7 +13,7 @@ No arm grants human authorization. In C and D, gate output is the eligibility si
 
 | Metric | Definition |
 | --- | --- |
-| Incorrect approvals | Eligible outputs among reference-blocked cases divided by the number of reference-blocked cases. |
+| Incorrect approvals (false eligibility rate) | For each arm and run, divide the number of reference-blocked cases marked eligible by the total number of reference-blocked cases. Use the AI recommendation in A and the deterministic gate result in B–D. This measures eligibility before any human authorization. |
 | Incorrect blocks | Blocked outputs among reference-eligible cases divided by the number of reference-eligible cases. |
 | Risk detection | Precision and recall against labeled case risks using cited evidence. Report novel findings after blinded adjudication. |
 | Explanation quality | Blinded rubric scoring factual accuracy, citation support and actionable reasoning, each 0–2. |

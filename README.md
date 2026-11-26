@@ -8,7 +8,7 @@ Phase 0 defines the interfaces and research plan and provides a minimal FastAPI 
 
 ## Run locally on Windows
 
-Use Python 3.12. Confirm that `python --version` reports 3.12 before running these PowerShell commands.
+The tested Windows setup uses Python 3.12.10 with both the Git checkout and its virtual environment in a local folder outside OneDrive. Open PowerShell at the root of that checkout and confirm that `python --version` reports Python 3.12.
 
 ```powershell
 python -m venv .venv
@@ -18,9 +18,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m uvicorn agent_release_lab.main:app
 ```
 
-With the server running, open `http://127.0.0.1:8000/health` to check that it returns `{"status":"ok"}`. Runtime needs no API credentials.
-
-If Windows cannot create the environment inside a synced folder, use a virtual environment in a local folder outside OneDrive and run the same commands with its Python executable.
+With the server running, open `http://127.0.0.1:8000/health` to check that it returns `{"status":"ok"}`. Press Ctrl+C in PowerShell to stop the server. Runtime needs no API credentials.
 
 ## Project documents
 
