@@ -14,11 +14,13 @@ Send UTF-8 JSON with `Content-Type: application/json` for POST requests. The API
 | `POST /v1/suites` | Evaluation suite with explicit `schema_version` 1 | `{"fingerprint":"…"}` |
 | `GET /v1/suites/{fingerprint}` | Suite fingerprint | `{"fingerprint":"…","record":{…}}` |
 | `POST /v1/evidence` | `{"record":{…},"artifact_base64":"…"}`. The record requires explicit `schema_version` 1. | `{"id":"…","fingerprint":"…"}`. Retain the fingerprint independently for verification. |
-| `GET /v1/evidence/{evidence_id}` | Evidence ID | `{"fingerprint":"…","record":{…},"artifact_base64":"…"}` after integrity and binding checks |
+| `GET /v1/evidence?evidence_id=…` | Evidence ID as a query parameter | `{"fingerprint":"…","record":{…},"artifact_base64":"…"}` after integrity and binding checks |
 | `POST /v1/comparisons` | `baseline_fingerprint` and `candidate_fingerprint`. Optional `baseline_metadata` and `candidate_metadata` must be supplied together. | Both fingerprints, classification version, and changes with `field`, `categories`, `before`, and `after`. |
 | `POST /v1/evidence-verifications` | `evidence_id`, `candidate_fingerprint`, `suite_fingerprint`, and independently retained `expected_record_fingerprint` | `{"verified":true,"fingerprint":"…"}` when the record, artifact, and expected bindings match |
 
 Successful responses use HTTP 200, including identical registration retries. A missing stored record returns 404. Reusing an immutable suite revision or evidence ID with different content, or detecting a missing or mismatched stored evidence record fingerprint, returns 409. An invalid payload or verification mismatch returns 422. Unsupported media and oversized bodies return 415 and 413 respectively.
+
+Pass evidence IDs through your HTTP client's query parameter encoder to preserve literal slashes and dot segments. Excessive JSON nesting and timestamps outside the supported UTC range return 422.
 
 ## Record fields
 

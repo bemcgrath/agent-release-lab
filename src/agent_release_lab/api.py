@@ -53,7 +53,7 @@ def _json_body(model: type[RecordType]) -> Callable[[Request], Awaitable[RecordT
             data.extend(chunk)
         try:
             return model.from_json(data.decode("utf-8"))
-        except ValueError as error:
+        except (ValueError, RecursionError) as error:
             raise HTTPException(422, "Invalid JSON record") from error
 
     return parse
@@ -110,7 +110,7 @@ def configure_registry_routes(app: FastAPI, database_path: Path) -> None:
         fingerprint = registry().register_evidence(submission.record, artifact)
         return {"id": submission.record.id, "fingerprint": fingerprint}
 
-    @app.get("/v1/evidence/{evidence_id:path}")
+    @app.get("/v1/evidence")
     def get_evidence(evidence_id: Identifier):
         evidence, artifact = registry().get_evidence(evidence_id)
         return {

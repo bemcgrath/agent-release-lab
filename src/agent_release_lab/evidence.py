@@ -67,7 +67,7 @@ class Evidence(VersionedRecord):
     def require_explicit_offset(cls, value: object) -> object:
         if not isinstance(value, str):
             return value
-        if not re.search(r"(?:[zZ]|[+-][0-9]{2}:?[0-9]{2})\Z", value):
+        if not re.search(r"(?:[zZ]|[+-](?:[01][0-9]|2[0-3]):?[0-5][0-9])\Z", value):
             raise ValueError("Evidence timestamp requires an explicit UTC offset")
         if value.endswith("z"):
             value = value[:-1] + "Z"
@@ -76,7 +76,10 @@ class Evidence(VersionedRecord):
     @field_validator("executed_at")
     @classmethod
     def normalize_time(cls, value: datetime) -> datetime:
-        return value.astimezone(timezone.utc)
+        try:
+            return value.astimezone(timezone.utc)
+        except OverflowError as error:
+            raise ValueError("Evidence timestamp is outside the supported UTC range") from error
 
     @property
     def fingerprint(self) -> str:

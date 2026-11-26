@@ -122,7 +122,7 @@ def test_http_registration_retrieval_comparison_and_verification(api, deployment
     assert recovered_suite.status_code == 200
     assert recovered_suite.json()["record"]["schema_version"] == 1
 
-    response = send("GET", "/v1/evidence/ledger/r1")
+    response = send("GET", "/v1/evidence", params={"evidence_id": "ledger/r1"})
     assert response.status_code == 200
     recovered = response.json()
     assert recovered["fingerprint"] == sha256(canonical_json(recovered["record"])) == fingerprint
@@ -174,6 +174,42 @@ def test_http_rejects_invalid_raw_json(api, path, body):
     assert not database.exists()
 
 
+def test_http_rejects_excessive_json_nesting(api):
+    send, database = api
+    raw = '{"runtime":{"nested":' + "[" * 1500 + "0" + "]" * 1500 + "}}"
+    response = send("POST", "/v1/manifests", content=raw, headers={"Content-Type": "application/json"})
+    assert response.status_code == 422
+    assert not database.exists()
+
+
+@pytest.mark.parametrize("timestamp", [
+    "0001-01-01T00:00:00+01:00",
+    "9999-12-31T23:59:59-01:00",
+    "2026-01-01T00:00:00+00:60",
+])
+def test_http_rejects_invalid_evidence_utc_time(api, deployment, suite, timestamp):
+    send, _ = api
+    submission = registrations(send, deployment, suite)
+    submission["record"]["executed_at"] = timestamp
+    response = send("POST", "/v1/evidence", json=submission)
+    assert response.status_code == 422
+    assert send("GET", "/v1/evidence", params={"evidence_id": "ledger/r1"}).status_code == 404
+
+
+@pytest.mark.parametrize("identifier", ["ledger/../r1", "ledger/./r1"])
+def test_http_retrieves_evidence_ids_with_literal_dot_segments(api, deployment, suite, identifier):
+    send, _ = api
+    submission = registrations(send, deployment, suite)
+    ordinary_id = "r1" if "/../" in identifier else "ledger/r1"
+    register(send, "/v1/evidence", submission | {"record": submission["record"] | {"id": ordinary_id}})
+    submission["record"]["id"] = identifier
+    fingerprint = register(send, "/v1/evidence", submission)
+    response = send("GET", "/v1/evidence", params={"evidence_id": identifier})
+    assert response.status_code == 200
+    assert response.json()["record"]["id"] == identifier
+    assert response.json()["fingerprint"] == fingerprint
+
+
 def test_http_rejects_duplicate_key_in_otherwise_valid_evidence(api, deployment, suite):
     send, _ = api
     submission = registrations(send, deployment, suite)
@@ -182,7 +218,7 @@ def test_http_rejects_duplicate_key_in_otherwise_valid_evidence(api, deployment,
     )
     response = send("POST", "/v1/evidence", content=raw, headers={"Content-Type": "application/json"})
     assert response.status_code == 422
-    assert send("GET", "/v1/evidence/ledger/r1").status_code == 404
+    assert send("GET", "/v1/evidence", params={"evidence_id": "ledger/r1"}).status_code == 404
 
 
 def test_http_rejects_ambiguous_types_and_unversioned_submissions(api, deployment, suite):
@@ -210,7 +246,7 @@ def test_http_missing_records_and_conflicts(api, deployment, suite):
     unknown = "0" * 64
     assert send("GET", f"/v1/manifests/{unknown}").status_code == 404
     assert send("GET", f"/v1/suites/{unknown}").status_code == 404
-    assert send("GET", "/v1/evidence/missing").status_code == 404
+    assert send("GET", "/v1/evidence", params={"evidence_id": "missing"}).status_code == 404
     submission = registrations(send, deployment, suite)
     record = submission["record"]
     assert send("POST", "/v1/evidence", json=submission | {
@@ -236,12 +272,12 @@ def test_http_detects_evidence_metadata_tampering(api, deployment, suite, field,
     send, database = api
     submission = registrations(send, deployment, suite)
     original = register(send, "/v1/evidence", submission)
-    response = send("GET", "/v1/evidence/ledger/r1")
+    response = send("GET", "/v1/evidence", params={"evidence_id": "ledger/r1"})
     record = response.json()["record"] | {field: value}
     with sqlite3.connect(database) as connection:
         connection.execute("UPDATE evidence SET payload = ?", (canonical_json(record),))
 
-    assert send("GET", "/v1/evidence/ledger/r1").status_code == 409
+    assert send("GET", "/v1/evidence", params={"evidence_id": "ledger/r1"}).status_code == 409
     assert send("POST", "/v1/evidence-verifications", json=verification(record, original)).status_code == 409
 
     # An externally retained fingerprint also detects changes to both database fields.
@@ -269,7 +305,7 @@ def test_legacy_registry_preserves_deployment_and_suite_but_cannot_verify_legacy
         )
     assert send("GET", f"/v1/manifests/{legacy_manifest.fingerprint}").status_code == 200
     assert send("GET", f"/v1/suites/{legacy_suite.fingerprint}").status_code == 200
-    response = send("GET", "/v1/evidence/legacy")
+    response = send("GET", "/v1/evidence", params={"evidence_id": "legacy"})
     assert response.status_code == 409
     assert "Legacy evidence" in response.json()["detail"]
 
