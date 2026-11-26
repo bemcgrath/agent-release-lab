@@ -560,6 +560,38 @@ class Governance:
             self._require_access(actor_id, agent)
             return self._view(db, assessment_id, agent, submitter, generation, decision)
 
+    def inventory(self, actor_id: str) -> list[dict]:
+        with self.registry.transaction() as db:
+            self._require_current_trust(db)
+            actor = self.actors.get(actor_id)
+            if actor is None:
+                raise Unauthorized("Unknown actor")
+            agents = {agent for grants in actor.grants.values() for agent in grants}
+            return [
+                {"agent_id": agent, "ownership": self._owner(db, agent)}
+                for agent in sorted(agents)
+            ]
+
+    def release_history(self, actor_id: str, agent_id: str) -> dict:
+        self._require_access(actor_id, agent_id)
+        with self.registry.transaction() as db:
+            self._require_current_trust(db)
+            candidates = self.registry.manifest_history(db, agent_id)
+            assessments = []
+            for assessment_id, submitter, generation, stored in db.execute(
+                """SELECT id, submitter, generation, decision FROM governance_assessments
+                   WHERE agent_id = ? ORDER BY rowid DESC LIMIT 50""", (agent_id,)
+            ):
+                view = self._view(db, assessment_id, agent_id, submitter, generation, json.loads(stored))
+                assessments.append({key: view[key] for key in (
+                    "assessment_id", "candidate_fingerprint", "assessed_at", "eligibility", "authorization",
+                    "deployment_authorization", "risk_tier",
+                )})
+            return {
+                "agent_id": agent_id, "ownership": self._owner(db, agent_id),
+                "active": self._active(db, agent_id), "candidates": candidates, "assessments": assessments,
+            }
+
     def decide(self, actor_id: str, assessment_id: str, approval: ApprovalRequest) -> dict:
         with self.registry.transaction(write=True) as db:
             trust_revision = self._require_current_trust(db)

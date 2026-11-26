@@ -1,6 +1,6 @@
 # Architecture
 
-Python 3.12 hosts FastAPI with Pydantic input and output contracts. The planned interface uses HTML, CSS and JavaScript served locally. SQLite stores immutable records and audit events. YAML provides a human-editable policy and fixture format. pytest covers contracts and workflow invariants.
+Python 3.12 hosts FastAPI with Pydantic input and output contracts. A local dashboard uses HTML, CSS and JavaScript. SQLite stores immutable records and audit events. YAML provides a human-editable policy and fixture format. pytest covers contracts and workflow invariants.
 
 | Component | Responsibility |
 | --- | --- |
@@ -28,6 +28,8 @@ The [Phase 2 governance API](GOVERNANCE_API.md) adds an immutable policy registr
 
 Assessment selects candidate evidence from the registry and reconciles authenticated producer reports, including explicit remediation links. Baselines refer to historical authorized releases after a one-time first-release bootstrap. The assessment records the owner, trust generation, policy and baseline authority so approval can check that those prerequisites are still current. Deployment authorization is a separate future boundary.
 
+The [Phase 3 advisory reviewer](ADVISORY_REVIEW.md) builds immutable snapshots from recorded assessments. A provider receives text instructions and JSON bytes with bounded artifact excerpts. Schema and citation validation runs before findings enter the append-only advisory table. The dashboard reads governed state and advisory history separately. Its synthetic demonstration uses the same deterministic workflow and fake provider against an isolated temporary database.
+
 ## Target repository layout
 
 Phase 0 establishes the root documentation and packaging files, `docs/`, the `src/agent_release_lab/` package with its FastAPI entry point, `tests/`, and the Python validation workflow. Add planned directories with their first implementation as the [roadmap](ROADMAP.md) progresses.
@@ -46,10 +48,10 @@ agent-release-lab/
 │   ├── governance/           Policies, deterministic assessments and human decisions
 │   ├── evidence/             Evidence registration and verification
 │   ├── reviewers/            Advisory reviewers and provider adapters
+│   ├── web/                  Packaged local dashboard assets
 │   └── experiments/          Benchmark execution and scoring
 ├── schemas/                  Versioned contracts shared with external consumers
 ├── fixtures/                 Synthetic cases shared by tests and experiments
 ├── tests/                    Automated validation
-├── web/                      Local HTML, CSS and JavaScript dashboard
 └── .github/workflows/        Continuous integration
 ```
