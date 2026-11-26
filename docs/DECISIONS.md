@@ -49,3 +49,11 @@
 - Record a non-secret trust fingerprint and persistent generation. Changing or restoring trust invalidates pending approvals, even when the change is unrelated to the candidate.
 - Treat completed decisions as historical. Defer live deployment authorization and its single-use, target-specific authorization mechanism. The service never reports historical approval as an evaluated deployment authorization.
 - Derive an authorized baseline's policy pin from its approving assessment. Trust changes require an explicit local operator command. Protected HTTP reads and decisions verify the active trust revision instead of activating the worker's local configuration.
+
+## Phase 3 decisions
+
+- Pass immutable canonical snapshots and call limits through the provider interface. Keep provider instructions separate from untrusted evidence content. Validate exact citation pairs and require uncertainty for uncited findings.
+- Store advisory review output and trace data separately from governance and human decisions. Retain validated findings, and retain a fingerprint and reason for rejected provider output.
+- Use a credential-free deterministic provider by default. Make external text-only chat completions opt-in with time, size, usage and concurrency limits.
+- Serve the local dashboard with the application. Reuse the existing scoped human-decision endpoint and keep deployment authorization visibly unevaluated.
+- Run the Ledger Finch demo against an isolated ephemeral registry using the same gate. Keep comparative experiments and a secondary reviewer for Phase 4.

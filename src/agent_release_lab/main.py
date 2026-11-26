@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI
 
 from .api import configure_registry_routes
+from .dashboard import configure_dashboard
 from .governance.api import configure_governance_routes
 from .governance.models import LocalTrust
 
@@ -18,7 +19,8 @@ def create_app(database_path: str | Path | None = None, *, trust: LocalTrust | N
     if trust is None:
         trust = LocalTrust.from_json(Path(trust_path).read_bytes()) if trust_path else LocalTrust()
     configure_registry_routes(app, database)
-    configure_governance_routes(app, database, trust)
+    governance, actor = configure_governance_routes(app, database, trust)
+    configure_dashboard(app, governance, actor)
 
     @app.get("/health")
     def health() -> dict[str, str]:

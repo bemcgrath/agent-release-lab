@@ -19,7 +19,7 @@ from .policy import Policy
 from .service import Governance, GovernanceInputError, Unauthorized
 
 
-def configure_governance_routes(app: FastAPI, database_path: Path, trust: LocalTrust) -> None:
+def configure_governance_routes(app: FastAPI, database_path: Path, trust: LocalTrust):
     @lru_cache(maxsize=1)
     def service() -> Governance:
         return Governance(Registry(database_path), trust)
@@ -113,3 +113,5 @@ def configure_governance_routes(app: FastAPI, database_path: Path, trust: LocalT
     @app.get("/v1/governance/agents/{agent_id}/audit")
     def audit(agent_id: Identifier, actor_id: str = actor, after_id: Annotated[int, Query(ge=0)] = 0):
         return {"events": service().audit(actor_id, agent_id, after_id)}
+
+    return service, actor

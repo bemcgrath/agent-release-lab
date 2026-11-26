@@ -12,10 +12,11 @@ AI evaluates and recommends. Deterministic controls enforce. Authorized humans r
 - Python interfaces for strict manifest and evaluation suite registration, evidence binding and integrity checks, and classified release comparisons. The [release manifest contract](docs/RELEASE_MANIFEST.md) documents the interfaces.
 - Local HTTP endpoints for the registries, release comparison, and evidence verification. See the [HTTP API](docs/API.md) for requests, responses, and database configuration.
 - Deterministic eligibility over the registered evidence inventory, authorized baselines, and scoped human decisions with transactional reassessment and audit history. See the [Governance API](docs/GOVERNANCE_API.md) for local setup and the distinction between historical approval and deployment.
+- A local dashboard and independently recorded AI advisory reviews. The Ledger Finch demo runs with a deterministic fake provider and no API credentials. See the [advisory reviewer and dashboard guide](docs/ADVISORY_REVIEW.md).
 
 ## Planned capabilities
 
-The [roadmap](docs/ROADMAP.md) covers AI-assisted review, a dashboard, and a comparative experiment runner.
+The [roadmap](docs/ROADMAP.md) covers the comparative experiment runner and independent secondary reviewer.
 
 ## Run locally on Windows
 
@@ -32,6 +33,8 @@ python -m venv .venv
 
 With the server running, open `http://127.0.0.1:8000/health` to check that it returns `{"status":"ok"}`. Press Ctrl+C in PowerShell to stop the server. Runtime needs no API credentials.
 
+Open `http://127.0.0.1:8000/` for the interactive Ledger Finch demonstration. Connect with a local governance bearer credential to view scoped registry entries and record human decisions.
+
 ## Project documents
 
 - [Product requirements](docs/PRODUCT_REQUIREMENTS.md)
@@ -40,6 +43,7 @@ With the server running, open `http://127.0.0.1:8000/health` to check that it re
 - [HTTP API](docs/API.md)
 - [Governance policy](docs/GOVERNANCE_POLICY.md)
 - [Governance API](docs/GOVERNANCE_API.md)
+- [Advisory reviewer and dashboard](docs/ADVISORY_REVIEW.md)
 - [Evaluation strategy](docs/EVALUATION_STRATEGY.md)
 - [Security model](docs/SECURITY_MODEL.md)
 - [Roadmap](docs/ROADMAP.md)

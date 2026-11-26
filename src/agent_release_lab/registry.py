@@ -75,6 +75,28 @@ class Registry:
             (candidate_fingerprint,),
         )
 
+    @staticmethod
+    def manifest_history(connection: sqlite3.Connection, agent_id: str) -> list[dict]:
+        rows = connection.execute(
+            """SELECT fingerprint, payload FROM manifests
+               WHERE json_extract(CASE WHEN json_valid(CAST(payload AS TEXT))
+                    THEN CAST(payload AS TEXT) ELSE '{}' END, '$.agent_id') = ?
+               ORDER BY rowid DESC LIMIT 50""",
+            (agent_id,),
+        )
+        manifests = []
+        for fingerprint, payload in rows:
+            try:
+                manifest = Manifest.from_json(payload)
+            except (TypeError, ValueError, RecursionError):
+                continue
+            if manifest.fingerprint == fingerprint:
+                manifests.append({
+                    "fingerprint": fingerprint, "schema_version": manifest.schema_version,
+                    "purpose": manifest.scope.purpose if manifest.scope else None,
+                })
+        return manifests
+
     def register_manifest(self, manifest: Manifest) -> str:
         payload = Manifest.from_json(manifest.canonical_bytes()).canonical_bytes()
         fingerprint = sha256(payload)

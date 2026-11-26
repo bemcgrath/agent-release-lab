@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Agent Release Lab</title>
+  <link rel="stylesheet" href="/dashboard-assets/dashboard.css">
+  <script src="/dashboard-assets/dashboard.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">L</span>Agent Release Lab</a>
+    <span id="mode-label" class="mode-label">Synthetic demo</span>
+  </header>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="side-controls">
+        <label for="scenarios">Ledger Finch scenarios</label>
+        <select id="scenarios">
+          <option value="suspicious">Suspicious evidence</option>
+          <option value="ready">Eligible for review</option>
+          <option value="blocked">Missing test coverage</option>
+          <option value="conflict">Conflicting evidence</option>
+          <option value="approved">Historically approved</option>
+        </select>
+        <label for="agents">Agent inventory</label>
+        <select id="agents" disabled aria-label="Agent inventory"></select>
+        <form id="connect">
+          <label for="token">Local bearer credential</label>
+          <input id="token" type="password" autocomplete="off" required>
+          <button type="submit" class="secondary">Connect to registry</button>
+        </form>
+        <button type="button" id="demo-return" class="secondary" hidden>Return to synthetic demo</button>
+      </div>
+      <nav aria-label="Review sections">
+        <a href="#releases">Release history</a>
+        <a href="#comparison">Component comparison</a>
+        <a href="#governance">Governance</a>
+        <a href="#evidence">Evidence</a>
+        <a href="#advisory">AI findings</a>
+        <a href="#approval">Human decisions</a>
+        <a href="#audit">Audit history</a>
+      </nav>
+    </aside>
+    <main id="content">
+      <div class="overview">
+        <div><h1 id="agent-title">Ledger Finch</h1><p id="agent-owner">Loading review workspace</p></div>
+        <div id="overview-status" class="status-group" aria-label="Release status"></div>
+      </div>
+      <p id="notice" class="notice" role="status" aria-live="polite"></p>
+      <section id="releases">
+        <div class="section-title"><h2>Release history</h2><div id="assessment-picker" hidden>
+          <label for="assessments">Assessment</label>
+          <select id="assessments"></select>
+        </div></div>
+        <div id="release-data"></div>
+      </section>
+      <section id="comparison"><h2>Component comparison</h2><div id="comparison-data"></div></section>
+      <div class="detail-grid">
+        <section id="governance"><h2>Deterministic governance</h2><div id="governance-data"></div></section>
+        <section id="evidence"><h2>Evidence and supersession</h2><div id="evidence-data"></div></section>
+      </div>
+      <section id="advisory">
+        <div class="section-title"><h2>AI advisory findings</h2>
+          <button type="button" id="review-action" hidden>Run advisory review</button>
+        </div>
+        <div id="advisory-data"></div>
+      </section>
+      <section id="approval">
+        <h2>Human decisions</h2>
+        <div id="approval-data"></div>
+        <form id="approval-form" hidden>
+          <div class="form-row">
+            <div><label for="approval-role">Role</label><select id="approval-role"></select></div>
+            <div><label for="decision">Decision</label><select id="decision">
+              <option value="approve">Approve</option><option value="decline">Decline</option>
+            </select></div>
+          </div>
+          <label for="rationale">Rationale</label>
+          <textarea id="rationale" rows="3" maxlength="2000" required></textarea>
+          <button type="submit">Record human decision</button>
+        </form>
+      </section>
+      <section id="audit"><h2>Audit history</h2><div id="audit-data"></div><button type="button" class="secondary" id="audit-more" hidden>Load more events</button></section>
+    </main>
+  </div>
+</body>
+</html>
