@@ -10,6 +10,7 @@ from .manifests import Manifest, Tool
 
 Category = Literal["behavioral", "administrative", "security", "permission", "governance"]
 CLASSIFICATION_VERSION = 1
+SCOPED_CLASSIFICATION_VERSION = 2
 TOOL_CATEGORIES: Mapping[str, tuple[Category, ...]] = {
     "interface": ("behavioral",),
     "executable": ("behavioral",),
@@ -85,6 +86,21 @@ def compare_manifests(
         baseline.model_dump(mode="json"), candidate.model_dump(mode="json"),
         {"runtime": ("behavioral",), "security": ("security",)},
     )
+    if baseline.scope is not None or candidate.scope is not None:
+        before_scope = baseline.scope.model_dump(mode="json") if baseline.scope else {}
+        after_scope = candidate.scope.model_dump(mode="json") if candidate.scope else {}
+        changes.extend(_diff(
+            before_scope, after_scope,
+            {"purpose": ("behavioral",), "allowed_tasks": ("behavioral", "permission")},
+            prefix="scope.",
+        ))
+        changes.extend(_diff(
+            before_scope.get("boundaries", {}), after_scope.get("boundaries", {}),
+            dict.fromkeys(
+                ("allowed_tools", "allowed_data_sources", "allowed_destinations", "can_write"),
+                ("behavioral", "permission", "security"),
+            ), prefix="scope.boundaries.",
+        ))
     component_fields: dict[str, tuple[Category, ...]] = {
         field: ("behavioral",) for field in ("model", "prompt", "harness", "business_rules")
     }
@@ -98,7 +114,12 @@ def compare_manifests(
             baseline_metadata.model_dump(), candidate_metadata.model_dump(),
             {"label": ("administrative",), "description": ("administrative",)}, prefix="metadata.",
         ))
-    return ManifestComparison(baseline.fingerprint, candidate.fingerprint, tuple(changes))
+    version = (
+        SCOPED_CLASSIFICATION_VERSION
+        if 2 in (baseline.schema_version, candidate.schema_version)
+        else CLASSIFICATION_VERSION
+    )
+    return ManifestComparison(baseline.fingerprint, candidate.fingerprint, tuple(changes), version)
 
 
 def compare_governance(baseline: GovernanceSnapshot, current: GovernanceSnapshot) -> tuple[Change, ...]:

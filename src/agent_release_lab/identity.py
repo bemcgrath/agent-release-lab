@@ -4,7 +4,7 @@ import hashlib
 import json
 from typing import Annotated, Self
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints
+from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints, field_validator
 
 
 Identifier = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:/@+-]{0,127}$")]
@@ -71,3 +71,14 @@ class Record(BaseModel):
 
     def canonical_bytes(self) -> bytes:
         return canonical_json(self.model_dump(mode="json"))
+
+
+class VersionedRecord(Record):
+    schema_version: int
+
+    @field_validator("schema_version", mode="before")
+    @classmethod
+    def check_version_type(cls, value: object) -> object:
+        if type(value) is not int:
+            raise ValueError("schema_version must be an integer")
+        return value

@@ -22,6 +22,8 @@ Approval rechecks gate inputs and active policy inside the same transaction as t
 
 The comparison classifies changes, the active policy classifies the agent's risk, and the gate combines the applicable requirements. Assessments pin suite revisions independently of candidate identity so policy can retire evidence without changing the deployed candidate. See the [manifest change and suite contracts](RELEASE_MANIFEST.md) and [risk policy](GOVERNANCE_POLICY.md).
 
+The Phase 1 [HTTP API](API.md) exposes the SQLite registries, classified comparison, and evidence verification. A stored evidence fingerprint covers canonical metadata independently of the artifact digest. HTTP verification checks both and requires a fingerprint retained by the caller.
+
 ## Target repository layout
 
 Phase 0 establishes the root documentation and packaging files, `docs/`, the `src/agent_release_lab/` package with its FastAPI entry point, `tests/`, and the Python validation workflow. Add planned directories with their first implementation as the [roadmap](ROADMAP.md) progresses.

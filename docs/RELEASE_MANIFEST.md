@@ -14,9 +14,23 @@ The deployed tool map is keyed by tool ID. Each tool pins its interface, executa
 
 Registry verification checks binding, suite membership and artifact integrity. Phase 2 owns trust, freshness, accepted-suite policy selection and release authorization.
 
+## Schema versions and operating scope
+
+Manifest schema 1 preserves its canonical encoding and fingerprints. Manifest schema 2 adds a required `scope` with a structured purpose identifier, allowed task identifiers, and operating boundaries for tools, data sources, destinations, and write access. These restrictions are identity fields. A scope change alters the manifest fingerprint, and comparison mapping version 2 reports its behavioral, permission, and security categories as applicable. The registry records declared scope. Execution and policy enforcement belong to later phases.
+
+Display labels and prose descriptions are administrative metadata. Supply them separately to comparison. A description edit preserves the deployment fingerprint and does not invalidate existing evidence by itself.
+
+Evaluation suites and evidence use independent `schema_version` fields. Both current contracts use integer version 1. The suite schema version is distinct from its ID and revision. Legacy unversioned suite payloads retain their fingerprints and remain readable. Publishing an explicit version 1 suite with otherwise identical content requires a new suite revision and produces a different fingerprint. A suite schema change has no effect on the deployment fingerprint.
+
 ## Evidence contract
 
 Each evidence record carries a unique ID, candidate fingerprint, check ID and revision, dataset and runner revisions, execution time, result, artifact digest and source provenance. Evidence is verified against the artifact bytes and the policy's accepted provenance and freshness requirements. A matching digest verifies integrity and policy separately establishes whether the producer is trusted. Evidence for another fingerprint cannot satisfy a mandatory check. A targeted rerun must produce a new record for the new fingerprint.
+
+At registration, the registry computes SHA-256 over the complete canonical evidence payload, including schema version, binding, execution time, result, artifact digest, producer and source. It stores that record fingerprint separately from the payload. Retrieval and verification independently recompute it, check the registry bindings and verify the artifact bytes against their own digest. For HTTP verification, retain the original registration fingerprint outside the SQLite database and send it as the expected record fingerprint. This detects a payload substitution even if the stored fingerprint was also replaced.
+
+These checks detect altered records and artifacts relative to their original digests. A party that controls both the data and all copies of the reference digests can rewrite them together. A fingerprint does not authenticate a producer or prove that a check actually ran. Existing evidence rows created before fingerprint storage are preserved, but verification fails closed because they have no original registration fingerprint. Re-establish evidence from a trusted source or rerun the check and register under a new evidence ID.
+
+Subsequent phases must authenticate producers, bind their identity to the candidate, suite, check, artifact digest and record fingerprint, and define trust roots, revocation and freshness rules. Provider integrations must resolve aliases to verified immutable revisions or independently verified digests. Merely supplying a revision string does not establish that a provider will continue serving the same model.
 
 Compare two candidates using their immutable fingerprints and display changed component pins. A comparison can suggest checks to rerun. Eligibility comes from assessment against the pinned policy.
 
