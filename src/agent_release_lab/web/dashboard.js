@@ -254,7 +254,9 @@ function renderAudit(events) {
   $("audit-more").hidden = state.demo || events.length === 0 || events.length % 100 !== 0;
   $("audit-data").replaceChildren(table(["Time", "Event", "Actor", "Record"], events.map((event) => {
     const detail = node("details");
-    detail.append(node("summary", "", "View record"), node("code", "", JSON.stringify(event.details)));
+    const record = node("pre", "audit-record");
+    record.append(node("code", "", JSON.stringify(event.details, null, 2)));
+    detail.append(node("summary", "", "View record"), record);
     return [stamp(event.occurred_at), words(event.event), event.actor, detail];
   }), "No audit events available."));
 }

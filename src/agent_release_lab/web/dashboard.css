@@ -59,6 +59,15 @@ table { width: 100%; border-collapse: collapse; font-size: .84rem; text-align: l
 th { color: var(--muted); font-size: .76rem; font-weight: 650; background: #f1f5fa; }
 th, td { padding: 8px 9px; border-bottom: 1px solid #e5ebf3; vertical-align: top; overflow-wrap: anywhere; }
 td:first-child { font-weight: 600; }
+#audit-data table { table-layout: fixed; min-width: 640px; }
+#audit-data th:nth-child(1) { width: 23%; }
+#audit-data th:nth-child(2) { width: 28%; }
+#audit-data th:nth-child(3) { width: 17%; }
+#audit-data td { overflow-wrap: break-word; }
+.audit-record {
+  margin: 6px 0 0; max-height: 18rem; overflow: auto; padding: 9px;
+  border-radius: 6px; background: #f1f5fa; white-space: pre-wrap; overflow-wrap: anywhere;
+}
 .items { margin: 0 0 9px; padding-left: 19px; font-size: .85rem; color: var(--muted); }
 .items li { margin-bottom: 6px; overflow-wrap: anywhere; }
 .findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); gap: 10px; }
