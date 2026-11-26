@@ -6,6 +6,7 @@ Python 3.12 hosts FastAPI with Pydantic input and output contracts. The planned 
 | --- | --- |
 | Manifest registry | Validate, fingerprint and store candidate configurations. |
 | Policy registry | Register immutable policy revisions and resolve the active policy for assessment. |
+| Evaluation suite registry | Resolve independently versioned checks, datasets, runners and scoring settings. |
 | Evidence registry | Store exact candidate bindings, artifact hashes and provenance. |
 | Comparison engine | Diff explicit baseline and candidate manifests by component. |
 | Deterministic engine | Verify policy and evidence and compute eligibility with reason codes. |
@@ -19,9 +20,11 @@ The assessment pins candidate, policy revision and evidence inventory. The revie
 
 Approval rechecks gate inputs and active policy inside the same transaction as the decision and audit write. A policy change or required evidence change calls for reassessment. Use [manifest](RELEASE_MANIFEST.md), [policy](GOVERNANCE_POLICY.md) and [security](SECURITY_MODEL.md) contracts for implementation details.
 
+The comparison classifies changes, the active policy classifies the agent's risk, and the gate combines the applicable requirements. Assessments pin suite revisions independently of candidate identity so policy can retire evidence without changing the deployed candidate. See the [manifest change and suite contracts](RELEASE_MANIFEST.md) and [risk policy](GOVERNANCE_POLICY.md).
+
 ## Target repository layout
 
-Phase 0 establishes the root documentation and packaging files, `docs/`, the `src/agent_release_lab/` package with its FastAPI entry point, and `tests/`. Add the remaining directories with their first implementation as the [roadmap](ROADMAP.md) progresses.
+Phase 0 establishes the root documentation and packaging files, `docs/`, the `src/agent_release_lab/` package with its FastAPI entry point, `tests/`, and the Python validation workflow. Add planned directories with their first implementation as the [roadmap](ROADMAP.md) progresses.
 
 ```text
 agent-release-lab/

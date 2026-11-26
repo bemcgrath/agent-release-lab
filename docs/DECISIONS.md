@@ -17,3 +17,10 @@
 | Reviewer provider, secondary reviewer independence and cost budget | Phase 4 | Model drift, correlated errors and changing costs can confound results. |
 | Dataset size, calibration and analysis thresholds | Before Phase 4 measurements | Small or unrealistic synthetic cases can overstate results. |
 | Open-source license selection | Before distribution as open source | Reuse terms require a maintainer decision. |
+
+## Preliminary review decisions
+
+- Pin suite revisions independently from deployment identity. Current policy determines accepted suite revisions and evidence validity. Classify changes by affected field and allow overlapping categories. Record configurable risk rules with the active policy.
+- Use the 22-case synthetic dataset and provisional pilot criteria for the initial experiment design. Calibrate against held-out cases before claiming general results.
+- Validate Python 3.12 on Windows and Linux in GitHub Actions.
+- Recommend [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0) for permissive reuse and its explicit contributor patent grant. The maintainer selects the final license and adds the license text and package metadata after approval.
