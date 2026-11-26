@@ -2,6 +2,7 @@
 
 import hmac
 import json
+from dataclasses import asdict
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from sqlite3 import Connection
@@ -423,6 +424,8 @@ class Governance:
             "runtime_attestation": None,
             "change_categories": [],
             "classification_version": None,
+            "comparison": None,
+            "control_details": {},
             "mandatory_controls": [],
             "required_roles": [],
             "evidence": [proof.model_dump(exclude={"signature"}) for proof in request.evidence],
@@ -466,12 +469,16 @@ class Governance:
             categories.add("governance")
         result["change_categories"] = sorted(categories)
         result["classification_version"] = comparison.classification_version
+        result["comparison"] = [
+            asdict(change) | {"categories": list(change.categories)} for change in comparison.changes
+        ]
         tier, matches, risk_error = self._classify(request, candidate, policy, now)
         if risk_error:
             result["reasons"] = [{"code": risk_error}]
             return result
         controls, roles = policy.requirements(tier, categories)
         result.update(risk_tier=tier, risk_dimensions=matches, mandatory_controls=controls, required_roles=roles)
+        result["control_details"] = {name: policy.controls[name].model_dump(mode="json") for name in controls}
         statement = request.runtime.statement
         result["runtime_attestation"] = {
             "verifier": statement.verifier, "verified_at": statement.verified_at,
@@ -555,10 +562,15 @@ class Governance:
 
     def get_assessment(self, actor_id, assessment_id):
         with self.registry.transaction() as db:
-            self._require_current_trust(db)
-            agent, submitter, generation, _, decision = self._assessment(db, assessment_id)
-            self._require_access(actor_id, agent)
-            return self._view(db, assessment_id, agent, submitter, generation, decision)
+            assessment, _ = self.read_assessment(db, actor_id, assessment_id)
+            return assessment
+
+    def read_assessment(self, db: Connection, actor_id: str, assessment_id: str) -> tuple[dict, int]:
+        """Authorize a read or related write in the caller's existing transaction."""
+        trust = self._require_current_trust(db)
+        agent, submitter, generation, _, decision = self._assessment(db, assessment_id)
+        self._require_access(actor_id, agent)
+        return self._view(db, assessment_id, agent, submitter, generation, decision), trust["generation"]
 
     def inventory(self, actor_id: str) -> list[dict]:
         with self.registry.transaction() as db:
@@ -577,16 +589,26 @@ class Governance:
         with self.registry.transaction() as db:
             self._require_current_trust(db)
             candidates = self.registry.manifest_history(db, agent_id)
+            def summary(assessment_id, submitter, generation, stored):
+                view = self._view(db, assessment_id, agent_id, submitter, generation, json.loads(stored))
+                return {key: view[key] for key in (
+                    "assessment_id", "candidate_fingerprint", "assessed_at", "eligibility", "authorization",
+                    "deployment_authorization", "risk_tier",
+                )}
+
+            for candidate in candidates:
+                latest = db.execute(
+                    """SELECT id, submitter, generation, decision FROM governance_assessments
+                       WHERE agent_id = ? AND json_extract(CAST(decision AS TEXT), '$.candidate_fingerprint') = ?
+                       ORDER BY rowid DESC LIMIT 1""", (agent_id, candidate["fingerprint"]),
+                ).fetchone()
+                candidate["latest_assessment"] = summary(*latest) if latest else None
             assessments = []
             for assessment_id, submitter, generation, stored in db.execute(
                 """SELECT id, submitter, generation, decision FROM governance_assessments
                    WHERE agent_id = ? ORDER BY rowid DESC LIMIT 50""", (agent_id,)
             ):
-                view = self._view(db, assessment_id, agent_id, submitter, generation, json.loads(stored))
-                assessments.append({key: view[key] for key in (
-                    "assessment_id", "candidate_fingerprint", "assessed_at", "eligibility", "authorization",
-                    "deployment_authorization", "risk_tier",
-                )})
+                assessments.append(summary(assessment_id, submitter, generation, stored))
             return {
                 "agent_id": agent_id, "ownership": self._owner(db, agent_id),
                 "active": self._active(db, agent_id), "candidates": candidates, "assessments": assessments,
@@ -620,7 +642,9 @@ class Governance:
             )
             stale = (
                 not active or active["generation"] != generation or not scoped
-                or reassessed != {key: value for key, value in decision.items() if key != "assessed_at"}
+                or {key: value for key, value in reassessed.items()
+                    if key not in {"comparison", "control_details"} or key in decision}
+                != {key: value for key, value in decision.items() if key != "assessed_at"}
             )
             if stale:
                 db.execute("INSERT INTO governance_invalidations VALUES (?)", (assessment_id,))

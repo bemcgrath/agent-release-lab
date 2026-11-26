@@ -2,20 +2,93 @@
 
 import asyncio
 import json
+import sqlite3
+from contextlib import contextmanager
 from dataclasses import FrozenInstanceError
 from threading import Event
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from agent_release_lab.governance.service import Unauthorized
+from agent_release_lab.governance.models import AssessmentRequest, LocalTrust
+from agent_release_lab.governance.service import Governance, Unauthorized
 from agent_release_lab.identity import canonical_json, sha256
 from agent_release_lab.main import create_app
+from agent_release_lab.registry import RecordConflict, Registry
 from agent_release_lab.reviewers.contracts import ProviderReply, ReviewerConfig, Usage
 from agent_release_lab.reviewers.providers import ChatCompletions, FakeReviewer
 from agent_release_lab.reviewers.service import AdvisoryStore, evaluate_snapshot
 from agent_release_lab.reviewers.snapshot import build_snapshot
-from test_governance import setup, token, trust
+from test_governance import AGENT, NOW, manifest, setup, token, trust
+
+
+def test_advisory_write_checks_trust_inside_transaction(tmp_path, monkeypatch):
+    governance, request, _, _ = setup(tmp_path, {})
+    assessment = governance.assess("submitter", request)
+    store = AdvisoryStore(governance)
+    config = trust().model_dump()
+    next(actor for actor in config["actors"] if actor["id"] == "release")["token_digest"] = sha256(b"synthetic rotation")
+    rotated = Governance(Registry(governance.registry.path), LocalTrust.model_validate(config), lambda: NOW)
+    original_transaction = governance.registry.transaction
+
+    @contextmanager
+    def rotate_before_write(*, write=False):
+        if write:
+            rotated.activate_trust()
+        with original_transaction(write=write) as db:
+            yield db
+
+    monkeypatch.setattr(governance.registry, "transaction", rotate_before_write)
+    with pytest.raises(RecordConflict, match="trust configuration is stale"):
+        store.run("release", assessment["assessment_id"], ReviewerConfig(), FakeReviewer())
+    assert AdvisoryStore(rotated).list("release", assessment["assessment_id"]) == []
+
+
+def test_review_uses_recorded_administrative_comparison(tmp_path):
+    governance, request, _, _ = setup(tmp_path, {"metadata": "Corrected synthetic label"})
+    assessment = governance.assess("submitter", request)
+    snapshot = json.loads(build_snapshot(governance, assessment))
+    assert assessment["candidate_fingerprint"] == assessment["baseline_fingerprint"]
+    assert snapshot["changes"] == [{
+        "field": "metadata.label", "categories": ["administrative"],
+        "before": None, "after": "Corrected synthetic label",
+    }]
+
+
+def test_dashboard_displays_blocked_assessment_when_policy_is_unverifiable(tmp_path):
+    governance, request, policy, _ = setup(tmp_path, {})
+    with sqlite3.connect(governance.registry.path) as db:
+        db.execute("UPDATE governance_policies SET payload = ? WHERE fingerprint = ?", (b"{}", policy.fingerprint))
+    assessment = governance.assess("submitter", request)
+    app = create_app(governance.registry.path, trust=trust())
+
+    async def exercise():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            return await client.get("/v1/dashboard/assessments/" + assessment["assessment_id"],
+                                    headers={"Authorization": "Bearer " + token("release")})
+
+    response = asyncio.run(exercise())
+    assert response.status_code == 200
+    detail = response.json()
+    assert detail["assessment"]["eligibility"] == "blocked"
+    assert detail["assessment"]["reasons"] == [{"code": "governance_baseline_unverifiable"}]
+    assert detail["changes"] is None
+
+
+def test_candidate_summary_keeps_latest_assessment_outside_recent_window(tmp_path):
+    governance, request, _, _ = setup(tmp_path, {})
+    earlier = governance.assess("submitter", request)
+    other = manifest("rules")
+    governance.registry.register_manifest(other)
+    incomplete = AssessmentRequest(candidate_fingerprint=other.fingerprint)
+    for _ in range(50):
+        governance.assess("submitter", incomplete)
+    history = governance.release_history("release", AGENT)
+    assert len(history["assessments"]) == 50
+    assert all(item["candidate_fingerprint"] == other.fingerprint for item in history["assessments"])
+    candidate = next(item for item in history["candidates"] if item["fingerprint"] == request.candidate_fingerprint)
+    assert candidate["latest_assessment"]["assessment_id"] == earlier["assessment_id"]
+    assert candidate["latest_assessment"]["eligibility"] == "eligible"
 
 
 def sample_finding(evidence, uncertainty="This is limited to observed records."):

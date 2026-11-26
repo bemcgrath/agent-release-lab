@@ -113,12 +113,10 @@ function renderHistory(history, assessmentId) {
     item.assessment_id, short(item.candidate_fingerprint) + " · " + words(item.eligibility) + " · " + stamp(item.assessed_at),
   ]), assessmentId);
   $("assessment-picker").hidden = state.demo || assessments.length === 0;
-  const latest = new Map();
-  [...assessments].reverse().forEach((item) => latest.set(item.candidate_fingerprint, item));
   $("release-data").replaceChildren(table(
     ["Candidate", "Purpose", "Latest gate", "Human decision"],
     history.candidates.map((candidate) => {
-      const item = latest.get(candidate.fingerprint);
+      const item = candidate.latest_assessment;
       return [code(candidate.fingerprint), words(candidate.purpose || "—"),
         item ? badge(item.eligibility) : "Unassessed", item ? badge(item.authorization) : "—"];
     }), "No registered candidates.",
@@ -240,9 +238,9 @@ function renderDetail(detail) {
   const assessment = detail.assessment;
   $("overview-status").replaceChildren(badge(assessment.eligibility), badge(assessment.authorization),
     badge(assessment.deployment_authorization));
-  $("comparison-data").replaceChildren(table(["Field", "Baseline", "Candidate", "Categories"], detail.changes.map(
+  $("comparison-data").replaceChildren(table(["Field", "Baseline", "Candidate", "Categories"], (detail.changes || []).map(
     (change) => [change.field, format(change.before), format(change.after), change.categories.map(words).join(", ")],
-  ), "No component changes against this baseline."));
+  ), detail.changes === null ? "No comparison was recorded for this assessment." : "No changes against this baseline."));
   renderGovernance(assessment, detail.controls);
   renderEvidence(assessment, detail.evidence);
   renderAdvisory(detail.reviews);

@@ -1,7 +1,5 @@
 """Build canonical read-only projections of a deterministic assessment."""
 
-from dataclasses import asdict
-
 from ..evidence import EvidenceMismatch
 from ..governance.service import Governance
 from ..identity import canonical_json
@@ -14,17 +12,17 @@ def hide_artifact(evidence: dict) -> dict:
 
 def build_snapshot(governance: Governance, assessment: dict) -> bytes:
     registry = governance.registry
-    candidate = registry.get_manifest(assessment["candidate_fingerprint"])
-    baseline = assessment["baseline_fingerprint"]
-    changes = registry.compare(baseline, candidate.fingerprint).changes if baseline else ()
-    policy_fingerprint = assessment["policy_fingerprint"]
-    policy = governance.get_policy(policy_fingerprint) if policy_fingerprint else None
+    candidate_fingerprint = assessment["candidate_fingerprint"]
+    try:
+        candidate = registry.get_manifest(candidate_fingerprint).model_dump(mode="json")
+    except (RecordMissing, ValueError, RecursionError):
+        candidate = None
     evidence = []
     for reference in assessment["evidence"]:
         item = dict(reference, available=False)
         try:
             record, artifact = registry.get_evidence(reference["evidence_id"])
-            if (record.candidate_fingerprint == candidate.fingerprint
+            if (record.candidate_fingerprint == candidate_fingerprint
                     and record.fingerprint == reference.get("record_fingerprint")):
                 item.update(
                     available=True, check_id=record.check_id, result=record.result,
@@ -44,11 +42,8 @@ def build_snapshot(governance: Governance, assessment: dict) -> bytes:
                 "mandatory_controls", "reasons", "policy_fingerprint", "trust_fingerprint",
             )
         },
-        "candidate": candidate.model_dump(mode="json"),
-        "changes": [asdict(change) for change in changes],
-        "controls": {
-            key: policy.controls[key].model_dump(mode="json")
-            for key in assessment["mandatory_controls"]
-        } if policy else {},
+        "candidate": candidate,
+        "changes": assessment.get("comparison"),
+        "controls": assessment.get("control_details", {}),
         "evidence": evidence,
     })

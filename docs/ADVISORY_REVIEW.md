@@ -48,6 +48,8 @@ Review records contain the requested and returned model identities, provider, pr
 
 Registry views and advisory endpoints use the existing agent-scoped bearer mechanism. Audit and human decisions use the [governance API](GOVERNANCE_API.md). Candidate history and review lists return the most recent 50 entries. Audit history keeps its existing cursor.
 
+Each displayed candidate shows its latest assessment independently of the recent assessment list. The dashboard and reviewer use the recorded comparison, including administrative changes, and recorded policy requirements. Older assessments without those details remain readable and show the comparison as unavailable. Trust and scope are rechecked in the transaction that stores a review. A trust change during the provider call discards the result.
+
 ## Security boundaries
 
 Advisory records are append-only in a separate table. The provider receives no registry object, execution tools, human credentials, or authority to update eligibility, policy, risk or approval. The dashboard renders returned strings as text. Scoped humans still approve through the deterministic governance API, which runs its existing transactional reassessment. Historical approval does not authorize deployment.

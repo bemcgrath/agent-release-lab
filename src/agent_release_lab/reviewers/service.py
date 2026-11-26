@@ -11,7 +11,7 @@ from pydantic import TypeAdapter
 
 from ..governance.service import Governance
 from ..identity import Identifier, canonical_json, sha256
-from ..registry import RecordMissing
+from ..registry import RecordConflict, RecordMissing
 from .contracts import Findings, ReviewInput, ReviewerConfig, ReviewerProvider, Usage
 from .snapshot import build_snapshot
 
@@ -51,8 +51,8 @@ class AdvisoryStore:
             db.execute("CREATE INDEX IF NOT EXISTS advisory_by_assessment ON advisory_reviews(assessment_id)")
 
     def list(self, actor: str, assessment_id: str) -> list[dict]:
-        self.governance.get_assessment(actor, assessment_id)
         with self.registry.transaction() as db:
+            self.governance.read_assessment(db, actor, assessment_id)
             return [
                 json.loads(row[0]) for row in db.execute(
                     "SELECT result FROM advisory_reviews WHERE assessment_id = ? ORDER BY rowid DESC LIMIT 50",
@@ -65,17 +65,20 @@ class AdvisoryStore:
             row = db.execute(
                 "SELECT assessment_id, result FROM advisory_reviews WHERE id = ?", (review_id,),
             ).fetchone()
-        if row is None:
-            raise RecordMissing("Unknown advisory review")
-        self.governance.get_assessment(actor, row[0])
-        return json.loads(row[1])
+            if row is None:
+                raise RecordMissing("Unknown advisory review")
+            self.governance.read_assessment(db, actor, row[0])
+            return json.loads(row[1])
 
     def run(self, actor: str, assessment_id: str, config: ReviewerConfig, provider: ReviewerProvider) -> dict:
-        assessment = self.governance.get_assessment(actor, assessment_id)
+        with self.registry.transaction() as db:
+            assessment, trust_generation = self.governance.read_assessment(db, actor, assessment_id)
         snapshot = build_snapshot(self.governance, assessment)
         result = evaluate_snapshot(snapshot, assessment_id, config, provider)
-        self.governance.get_assessment(actor, assessment_id)
         with self.registry.transaction(write=True) as db:
+            _, current_generation = self.governance.read_assessment(db, actor, assessment_id)
+            if current_generation != trust_generation:
+                raise RecordConflict("Trust changed while advisory review was running")
             db.execute("INSERT INTO advisory_reviews VALUES (?, ?, ?, ?)", (
                 result["id"], assessment_id, snapshot, canonical_json(result),
             ))
