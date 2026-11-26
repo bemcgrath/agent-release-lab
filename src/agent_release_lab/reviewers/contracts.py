@@ -19,6 +19,8 @@ class ReviewerConfig(Record):
     max_input_bytes: int = Field(default=48000, ge=512, le=262144)
     max_output_tokens: int = Field(default=1800, ge=32, le=8192)
     max_total_tokens: int = Field(default=52000, ge=128, le=300000)
+    cumulative_token_budget: int = Field(default=1000000, ge=0, le=1000000000)
+    retain_provider_output: bool = False
     endpoint: str | None = None
 
     @model_validator(mode="after")
@@ -63,9 +65,22 @@ class Findings(Record):
 
 
 class Usage(Record):
-    input_tokens: int = Field(ge=0)
-    output_tokens: int = Field(ge=0)
-    source: Literal["provider", "estimate"]
+    input_tokens: int | None = Field(ge=0, le=1000000000)
+    output_tokens: int | None = Field(ge=0, le=1000000000)
+    source: Literal["provider", "estimate", "unknown"]
+
+    @model_validator(mode="after")
+    def known_counts(self) -> Self:
+        counts = (self.input_tokens is not None, self.output_tokens is not None)
+        if counts != ((False, False) if self.source == "unknown" else (True, True)):
+            raise ValueError("Usage counts must match their source")
+        return self
+
+    @property
+    def total(self) -> int | None:
+        if self.input_tokens is None or self.output_tokens is None:
+            return None
+        return self.input_tokens + self.output_tokens
 
 
 @dataclass(frozen=True)
@@ -84,6 +99,7 @@ class ProviderReply:
     output: bytes
     model: str
     usage: Usage
+    complete: bool = True
 
 
 class ReviewerProvider(Protocol):

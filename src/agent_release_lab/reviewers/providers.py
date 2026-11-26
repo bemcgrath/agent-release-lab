@@ -48,14 +48,18 @@ class ChatCompletions:
         data = json.loads(raw)
         choice = data["choices"][0]
         message = choice["message"]
-        if choice["finish_reason"] != "stop" or message.get("tool_calls") or message.get("refusal"):
-            raise ValueError("Provider did not return a complete text review")
+        content = message.get("content")
+        complete = (
+            choice.get("finish_reason") == "stop" and isinstance(content, str)
+            and not message.get("tool_calls") and not message.get("refusal")
+        )
+        try:
+            usage = Usage(input_tokens=data["usage"]["prompt_tokens"],
+                          output_tokens=data["usage"]["completion_tokens"], source="provider")
+        except (KeyError, TypeError, ValueError):
+            usage = Usage(input_tokens=None, output_tokens=None, source="unknown")
         return ProviderReply(
-            message["content"].encode("utf-8"), data["model"],
-            Usage(
-                input_tokens=data["usage"]["prompt_tokens"],
-                output_tokens=data["usage"]["completion_tokens"], source="provider",
-            ),
+            content.encode("utf-8") if isinstance(content, str) else b"", data["model"], usage, complete,
         )
 
 

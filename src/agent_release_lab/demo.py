@@ -129,7 +129,7 @@ def _approve(governance: Governance, assessment: dict, role: Literal["release", 
     ))
 
 
-def demo(scenario: Scenario, project) -> dict:
+def demo(scenario: Scenario, project, *, include_fake_review: bool = True) -> dict:
     with TemporaryDirectory(prefix="ledger-finch-demo-") as directory:
         registry = Registry(Path(directory) / "demo.sqlite3")
         governance = Governance(registry, _trust(), lambda: DEMO_TIME)
@@ -176,7 +176,8 @@ def demo(scenario: Scenario, project) -> dict:
             _approve(governance, assessment, "security")
         store = AdvisoryStore(governance)
         identifier = assessment["assessment_id"]
-        store.run("operator", identifier, ReviewerConfig(), FakeReviewer())
+        if include_fake_review:
+            store.run("operator", identifier, ReviewerConfig(), FakeReviewer())
         return {
             "inventory": governance.inventory("operator"),
             "history": governance.release_history("operator", AGENT),

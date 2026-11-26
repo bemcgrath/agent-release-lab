@@ -181,7 +181,7 @@ function renderAdvisory(reviews) {
     "Prompt fingerprint: " + review.prompt_fingerprint,
     "Input fingerprint: " + review.input_fingerprint,
     "Output fingerprint: " + (review.output_fingerprint || "Unavailable"),
-    ...(review.usage ? [
+    ...(review.usage?.source === "unknown" ? ["Usage: unknown"] : review.usage ? [
       "Usage: " + review.usage.input_tokens + " input, " + review.usage.output_tokens
         + " output tokens (" + review.usage.source + ")",
     ] : []),
@@ -199,7 +199,7 @@ function renderAdvisory(reviews) {
       const data = node("div", "finding-details");
       data.append(node("p", "", item.description), node("p", "", item.remediation));
       const citations = item.evidence.map((citation) => citation.evidence_id + " / " + short(citation.record_fingerprint));
-      data.append(empty("Confidence " + item.confidence + "%"));
+      data.append(empty("Model-reported confidence (uncalibrated): " + item.confidence + "%"));
       if (citations.length) data.append(list(citations));
       if (item.uncertainty) data.append(empty(item.uncertainty));
       card.append(data);

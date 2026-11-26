@@ -15,6 +15,12 @@ def build_snapshot(governance: Governance, assessment: dict) -> bytes:
     candidate_fingerprint = assessment["candidate_fingerprint"]
     try:
         candidate = registry.get_manifest(candidate_fingerprint).model_dump(mode="json")
+        # Opaque settings may contain irrelevant free-form configuration. Only keep pins and scope.
+        candidate.pop("runtime", None)
+        candidate.pop("security", None)
+        for tool in candidate["components"]["tools"].values():
+            tool.pop("permissions", None)
+            tool.pop("security", None)
     except (RecordMissing, ValueError, RecursionError):
         candidate = None
     evidence = []
@@ -33,6 +39,15 @@ def build_snapshot(governance: Governance, assessment: dict) -> bytes:
         except (RecordMissing, RecordConflict, EvidenceMismatch, ValueError, RecursionError):
             pass
         evidence.append(item)
+    changes = assessment.get("comparison")
+    if changes is not None:
+        changes = [
+            (change | {"before": None, "after": None, "values_redacted": True})
+            if change["field"] in {"runtime", "security"}
+            or change["field"].endswith(("/permissions", "/security"))
+            else change
+            for change in changes
+        ]
     return canonical_json({
         "schema_version": 1,
         "assessment": {
@@ -43,7 +58,14 @@ def build_snapshot(governance: Governance, assessment: dict) -> bytes:
             )
         },
         "candidate": candidate,
-        "changes": assessment.get("comparison"),
+        "governance_context": {key: assessment.get(key) for key in (
+            "ownership", "baseline_authority", "trust_generation", "runtime_attestation",
+        )},
+        "supersession": [
+            {"evidence_id": reason["evidence_id"], "superseded_by": reason["superseded_by"]}
+            for reason in assessment["reasons"] if reason.get("superseded_by")
+        ],
+        "changes": changes,
         "controls": assessment.get("control_details", {}),
         "evidence": evidence,
     })

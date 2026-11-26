@@ -17,11 +17,25 @@ The default provider is `fake`. Set `AGENT_RELEASE_LAB_REVIEWER_CONFIG` to a loc
 | `max_input_bytes` | 48000 | Limit for the prompt and canonical snapshot together |
 | `max_output_tokens` | 1800 | Maximum output requested from the provider before applying the total budget |
 | `max_total_tokens` | 52000 | Per-review token budget. A conservative UTF-8 byte estimate and framing allowance reserve input budget before a remote call. |
+| `cumulative_token_budget` | 1000000 | Lifetime accounting limit for the review ledger in this SQLite file. Set to zero to disable provider calls. |
+| `retain_provider_output` | false | Store up to 16 KiB of raw provider text in a separate local table for experimental inspection. |
 | `endpoint` | unset | Full chat-completions URL, required for `chat-completions`. HTTPS or loopback HTTP. |
 
 The optional HTTP adapter uses the text-only chat-completions contract with JSON-object response format and a completion limit. It supplies no tools or callbacks, and redirects are disabled. Supply a provider bearer credential through `AGENT_RELEASE_LAB_REVIEWER_TOKEN` if required by the endpoint. This credential is separate from local governance credentials. A [chat-completions reference](https://developers.openai.com/api/reference/resources/chat) documents the expected request shape. Live vendor access is opt-in and may incur charges. The demo and tests need no account.
 
-The adapter asks for usage and validates it against the configured budget before displaying findings. Provider-reported tokens and the preflight byte estimate are different measurements. The fake reports estimated usage. These limits govern a single review and do not provide a cumulative spend cap or guarantee a remote provider's billing. A timed-out adapter cannot supply later findings. Its worker may continue until the transport returns, and concurrency limits bound that work.
+Before a call, a SQLite writer transaction reserves the full per-review token budget against the cumulative limit. Concurrent workers share that ledger. Known provider usage settles the reservation to the reported total. Estimated usage keeps at least the reservation, and unknown usage keeps the full reservation. A crash can leave an unresolved reservation and it continues to count. A provider can report more than the reserved allowance. The result is rejected, the overage is recorded, and later calls are blocked when the ledger reaches its limit. This is an application token budget, and remote billing uses the provider's own accounting. A timed-out adapter cannot supply later findings. Its worker may continue until the transport returns, and concurrency limits bound that work.
+
+Run all server workers against the same database and operator-approved budget configuration. Existing review records from before the accounting ledger are preserved and excluded from the new cumulative counter. Use the local `advisory_usage` table to inspect reservations, charges and usage sources.
+
+## Live provider smoke test
+
+The opt-in smoke command exercises one chat-completions model against all five isolated Ledger Finch scenarios. Save a reviewer JSON configuration for the chosen external model and endpoint. Set `AGENT_RELEASE_LAB_REVIEWER_TOKEN` separately if needed. Obtain maintainer authorization for billable calls before supplying `--allow-charges`. Use the provider's applicable rates in USD per million tokens.
+
+```powershell
+.\.venv\Scripts\python.exe -m agent_release_lab.reviewers.smoke --allow-charges --config reviewer.json --input-usd-per-million INPUT_RATE --output-usd-per-million OUTPUT_RATE
+```
+
+Replace `INPUT_RATE` and `OUTPUT_RATE` with numeric rates. The command emits JSON containing scenario, requested and returned model, structured-output and citation validity, usage source and counts, latency, and estimated USD cost. Unknown usage leaves cost unset. The batch verifies capacity for five reservations before the first call and exits nonzero if any scenario fails. The automated tests exercise the smoke command and all scenarios with local stubs. A live service run requires separate authorization and is pending.
 
 ## Reviewer contract
 
@@ -29,9 +43,9 @@ A review request identifies an existing deterministic assessment. The service co
 
 Providers implement `ReviewerProvider.review(ReviewInput) -> ProviderReply`. The request contains only immutable snapshot bytes, separate instructions, model and call limits. Treat every value in the snapshot, including artifact excerpts, as untrusted data. Server-side validation rejects duplicate keys, unknown fields, invalid categories or severity, ambiguous scalar types, unsupported citation pairs, and uncited findings without explicit uncertainty. Citation pairs contain an evidence ID and its exact record fingerprint. Valid citations establish which registered data a finding refers to. They do not prove that the inference is accurate.
 
-Each accepted finding has a unique ID, risk category, severity, description, evidence citations, suggested remediation, confidence from 0 to 100, and uncertainty where appropriate. The fake uses deterministic heuristics for contradictions, risk and scope changes, missing tests, and instruction-like text. It is a demonstration and test double for the adapter boundary.
+Each accepted finding has a unique ID, risk category, severity, description, evidence citations, suggested remediation, model-reported confidence from 0 to 100, and uncertainty where appropriate. Confidence is uncalibrated. The fake uses deterministic heuristics for contradictions, risk and scope changes, missing tests, and instruction-like text. It is a demonstration and test double for the adapter boundary.
 
-Review records contain the requested and returned model identities, provider, prompt version and fingerprint, input fingerprint, validated output, elapsed time, usage and status. The local registry retains the canonical input for reproducibility. A rejected output is represented by a reason and output fingerprint when available. It is never shown as advice. Provider failures produce an unavailable result while existing eligibility and human decisions remain accessible.
+Review records contain the requested and returned model identities, adapter revision, complete non-secret reviewer configuration fingerprint, effective inference parameters, prompt content and fingerprint, input fingerprint, validated output, elapsed time, usage and status. Sampling follows recorded provider defaults. The local registry retains the canonical input for reproducibility. An optional bounded copy of raw provider text lives in a separate table and is unavailable through dashboard routes. A rejected output is represented by a reason and output fingerprint when available. Provider failures produce an unavailable result while existing eligibility and human decisions remain accessible.
 
 ## HTTP endpoints
 
