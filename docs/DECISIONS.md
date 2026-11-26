@@ -12,8 +12,8 @@
 | Decision | Resolve by | Risk until resolved |
 | --- | --- | --- |
 | Provider-specific verification of immutable model revisions | Before provider integration | A provider may reuse a revision label. Registration relies on the producer's immutable reference or digest. |
-| Trusted producer registration, evidence authentication and revocation | Phase 2 | An intact artifact may still originate from an untrusted source. |
-| Approver identity, role provisioning and audit tamper evidence | Phase 2 local workflow, strengthen before shared deployment | Local database administrators can alter recorded history. |
+| Central producer identity, key rotation automation and attestation revocation | Before shared deployment | Local key provisioning relies on trusted operators and policy changes for revocation. |
+| Central human identity and audit tamper evidence | Before shared deployment | Local bearer credentials identify accounts and SQLite administrators can alter history. |
 | Reviewer provider, secondary reviewer independence and cost budget | Phase 4 | Model drift, correlated errors and changing costs can confound results. |
 | Dataset size, calibration and analysis thresholds | Before Phase 4 measurements | Small or unrealistic synthetic cases can overstate results. |
 
@@ -32,3 +32,11 @@
 - Keep the existing manifest schema and legacy suite fingerprints readable. Introduce manifest schema 2 for hashed operating scope and explicit schema version 1 for new HTTP suite and evidence submissions.
 - Store and independently recompute the complete evidence record fingerprint. Require callers to supply a retained fingerprint for HTTP verification. Keep legacy rows without registration fingerprints and fail their verification.
 - Use raw JSON intake for HTTP requests so duplicate keys reach the strict parser. Keep artifact bytes inert and expose integrity checks through the local API.
+
+## Phase 2 decisions
+
+- Hash validated policy content independently of YAML formatting. Store immutable policy versions separately from agent-scoped activation, and advance an activation generation for every change.
+- Resolve risk by taking the highest result across six trust-attested input dimensions. A candidate's declared boundaries and verified effective boundaries are separate inputs.
+- Authenticate local producer and verifier claims with separate HMAC keys pinned by the policy. Authenticate accountable human actors through separately provisioned bearer credentials and agent grants.
+- Serialize approval reassessment and audit writes through the SQLite writer transaction. Require fresh assessment after invalidation and separate human release and security approvals for high-risk releases.
+- Execute the 22 documented scenarios with synthetic fixture material. Keep provider identity verification, production key custody and external audit anchoring as separate design work.

@@ -1,0 +1,27 @@
+{
+  "dataset_revision": "1.0.0",
+  "cases": [
+    {"id":"01","eligibility":"eligible"},
+    {"id":"02","eligibility":"eligible","metadata":"Corrected display label"},
+    {"id":"03","eligibility":"blocked","change":"model","reason":"evidence_wrong_candidate"},
+    {"id":"04","eligibility":"blocked","change":"prompt","reason":"evidence_wrong_candidate"},
+    {"id":"05","eligibility":"blocked","change":"timeout","reason":"evidence_wrong_candidate"},
+    {"id":"06","eligibility":"blocked","change":"tool","reason":"evidence_wrong_candidate"},
+    {"id":"07","eligibility":"eligible","change":"rules","fresh":true},
+    {"id":"08","eligibility":"blocked","checks":[],"reason":"evidence_missing"},
+    {"id":"09","eligibility":"blocked","result":"failed","reason":"evidence_failed"},
+    {"id":"10","eligibility":"blocked","age_days":8,"reason":"evidence_stale"},
+    {"id":"11","eligibility":"blocked","tamper":true,"reason":"evidence_integrity_invalid"},
+    {"id":"12","eligibility":"blocked","producer":"unknown-runner","reason":"evidence_producer_untrusted"},
+    {"id":"13","eligibility":"eligible","instructions":true},
+    {"id":"14","eligibility":"blocked","accept":["S2"],"reason":"evidence_suite_unaccepted"},
+    {"id":"15","eligibility":"eligible","accept":["S1","S2"]},
+    {"id":"16","eligibility":"eligible","accept":["S2"],"suite":"S2"},
+    {"id":"17","eligibility":"blocked","change":"write","fresh":true,"checks":["regression","least-privilege","isolation"],"reason":"evidence_missing","missing":"rollback","tier":"moderate"},
+    {"id":"18","eligibility":"eligible","change":"write","fresh":true,"checks":["regression","least-privilege","rollback","isolation"],"tier":"moderate"},
+    {"id":"19","eligibility":"blocked","change":"egress","fresh":true,"checks":["regression","least-privilege","rollback","isolation"],"reason":"evidence_missing","missing":"security-review","tier":"high"},
+    {"id":"20","eligibility":"eligible","change":"egress","fresh":true,"checks":["regression","least-privilege","rollback","isolation","security-review"],"tier":"high","single_approval":"pending"},
+    {"id":"21","eligibility":"blocked","unverified_runtime":true,"reason":"runtime_attestation_untrusted"},
+    {"id":"22","eligibility":"blocked","change":"boundary","fresh":true,"reason":"evidence_missing","missing":"isolation"}
+  ]
+}

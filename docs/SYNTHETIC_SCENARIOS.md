@@ -28,3 +28,5 @@ Dataset revision `1.0.0`. Each row is an independent case for Ledger Finch, a fi
 | 22 | Runtime trust boundary changes. Fresh regression passes. Required isolation evidence is missing. | Blocked | Security control missing |
 
 Use explicit frozen timestamps, digests, risk labels and approval states when encoding fixtures for the runner. Keep the case IDs stable within this dataset revision and issue a new revision for label or case changes.
+
+The [executable case data](../fixtures/governance/scenarios.json) and [pytest runner](../tests/test_governance.py) exercise all 22 cases against the deterministic gate with a fixed clock, synthetic signatures, and temporary SQLite storage. Case 20 additionally records the single authorized release approval and verifies that security approval remains pending.

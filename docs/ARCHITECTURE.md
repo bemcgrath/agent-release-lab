@@ -24,6 +24,8 @@ The comparison classifies changes, the active policy classifies the agent's risk
 
 The Phase 1 [HTTP API](API.md) exposes the SQLite registries, classified comparison, and evidence verification. A stored evidence fingerprint covers canonical metadata independently of the artifact digest. HTTP verification checks both and requires a fingerprint retained by the caller.
 
+The [Phase 2 governance API](GOVERNANCE_API.md) adds an immutable policy registry, agent-scoped policy activation, deterministic assessments, human decisions, and an append-only audit history. The Phase 1 registry and governance records share one SQLite file. Approval reserves the writer slot before reading the active policy and verifying immutable registry inputs. This prevents a concurrent policy or evidence write from changing those inputs before the decision commits.
+
 ## Target repository layout
 
 Phase 0 establishes the root documentation and packaging files, `docs/`, the `src/agent_release_lab/` package with its FastAPI entry point, `tests/`, and the Python validation workflow. Add planned directories with their first implementation as the [roadmap](ROADMAP.md) progresses.
@@ -39,7 +41,7 @@ agent-release-lab/
 │   ├── __init__.py
 │   ├── main.py               FastAPI entry point
 │   ├── manifests/            Candidate identity, registry and comparison
-│   ├── policies/             Versioned policies and deterministic checks
+│   ├── governance/           Policies, deterministic assessments and human decisions
 │   ├── evidence/             Evidence registration and verification
 │   ├── reviewers/            Advisory reviewers and provider adapters
 │   └── experiments/          Benchmark execution and scoring

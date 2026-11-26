@@ -61,6 +61,12 @@ class Registry:
             connection.execute("PRAGMA foreign_keys = ON")
             yield connection
 
+    @contextmanager
+    def transaction(self, *, write: bool = False) -> Iterator[sqlite3.Connection]:
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE" if write else "BEGIN")
+            yield connection
+
     def register_manifest(self, manifest: Manifest) -> str:
         payload = Manifest.from_json(manifest.canonical_bytes()).canonical_bytes()
         fingerprint = sha256(payload)
