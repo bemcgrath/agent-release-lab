@@ -30,7 +30,7 @@ At registration, the registry computes SHA-256 over the complete canonical evide
 
 These checks detect altered records and artifacts relative to their original digests. A party that controls both the data and all copies of the reference digests can rewrite them together. A fingerprint does not authenticate a producer or prove that a check actually ran. Existing evidence rows created before fingerprint storage are preserved, but verification fails closed because they have no original registration fingerprint. Re-establish evidence from a trusted source or rerun the check and register under a new evidence ID.
 
-Subsequent phases must authenticate producers, bind their identity to the candidate, suite, check, artifact digest and record fingerprint, and define trust roots, revocation and freshness rules. Provider integrations must resolve aliases to verified immutable revisions or independently verified digests. Merely supplying a revision string does not establish that a provider will continue serving the same model.
+The local [governance API](GOVERNANCE_API.md) authenticates producer proofs over the complete evidence record fingerprint using policy-pinned HMAC keys. Provider integrations must still resolve aliases to verified immutable revisions or independently verified digests. Merely supplying a revision string does not establish that a provider will continue serving the same model.
 
 Compare two candidates using their immutable fingerprints and display changed component pins. A comparison can suggest checks to rerun. Eligibility comes from assessment against the pinned policy.
 

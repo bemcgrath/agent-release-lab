@@ -11,10 +11,11 @@ AI evaluates and recommends. Deterministic controls enforce. Authorized humans r
 - Architecture and governance contracts, a research plan, and 22 labeled synthetic scenarios documented for future experiments.
 - Python interfaces for strict manifest and evaluation suite registration, evidence binding and integrity checks, and classified release comparisons. The [release manifest contract](docs/RELEASE_MANIFEST.md) documents the interfaces.
 - Local HTTP endpoints for the registries, release comparison, and evidence verification. See the [HTTP API](docs/API.md) for requests, responses, and database configuration.
+- Deterministic eligibility over the registered evidence inventory, authorized baselines, and scoped human decisions with transactional reassessment and audit history. See the [Governance API](docs/GOVERNANCE_API.md) for local setup and the distinction between historical approval and deployment.
 
 ## Planned capabilities
 
-The [roadmap](docs/ROADMAP.md) covers deterministic governance and human approval, AI-assisted review, a dashboard, and an experiment runner.
+The [roadmap](docs/ROADMAP.md) covers AI-assisted review, a dashboard, and a comparative experiment runner.
 
 ## Run locally on Windows
 
@@ -38,6 +39,7 @@ With the server running, open `http://127.0.0.1:8000/health` to check that it re
 - [Release manifest](docs/RELEASE_MANIFEST.md)
 - [HTTP API](docs/API.md)
 - [Governance policy](docs/GOVERNANCE_POLICY.md)
+- [Governance API](docs/GOVERNANCE_API.md)
 - [Evaluation strategy](docs/EVALUATION_STRATEGY.md)
 - [Security model](docs/SECURITY_MODEL.md)
 - [Roadmap](docs/ROADMAP.md)

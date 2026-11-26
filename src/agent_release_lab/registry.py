@@ -50,6 +50,7 @@ class Registry:
                     artifact BLOB NOT NULL,
                     record_fingerprint TEXT NOT NULL
                 );
+                CREATE INDEX IF NOT EXISTS evidence_by_candidate ON evidence(candidate_fingerprint, suite_fingerprint);
             """)
             columns = {column[1] for column in connection.execute("PRAGMA table_info(evidence)")}
             if "record_fingerprint" not in columns:
@@ -60,6 +61,19 @@ class Registry:
         with closing(sqlite3.connect(self.path)) as connection, connection:
             connection.execute("PRAGMA foreign_keys = ON")
             yield connection
+
+    @contextmanager
+    def transaction(self, *, write: bool = False) -> Iterator[sqlite3.Connection]:
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE" if write else "BEGIN")
+            yield connection
+
+    @staticmethod
+    def evidence_index(connection: sqlite3.Connection, candidate_fingerprint: str) -> Iterator[tuple[str, str]]:
+        yield from connection.execute(
+            "SELECT id, suite_fingerprint FROM evidence WHERE candidate_fingerprint = ? ORDER BY id",
+            (candidate_fingerprint,),
+        )
 
     def register_manifest(self, manifest: Manifest) -> str:
         payload = Manifest.from_json(manifest.canonical_bytes()).canonical_bytes()
