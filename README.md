@@ -4,7 +4,15 @@ An open-source research project for evaluating how organizations govern and appr
 
 AI evaluates and recommends. Deterministic controls enforce. Authorized humans retain accountability.
 
-Phase 0 defines the interfaces and research plan and provides a minimal FastAPI service with a health endpoint.
+## Implemented in Phase 0
+
+- An installable Python 3.12 package with a local FastAPI service exposing `GET /health`.
+- A smoke test and automated Python validation on Windows and Linux.
+- Architecture and governance contracts, a research plan, and 22 labeled synthetic scenarios documented for future experiments.
+
+## Planned capabilities
+
+The [roadmap](docs/ROADMAP.md) covers manifest, suite and evidence registries, deterministic governance and human approval, AI-assisted review, a dashboard, and an experiment runner.
 
 ## Run locally on Windows
 
@@ -30,3 +38,7 @@ With the server running, open `http://127.0.0.1:8000/health` to check that it re
 - [Security model](docs/SECURITY_MODEL.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Decisions](docs/DECISIONS.md)
+
+## License
+
+Agent Release Lab is licensed under the [Apache License 2.0](LICENSE).
