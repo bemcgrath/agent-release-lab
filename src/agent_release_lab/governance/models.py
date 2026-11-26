@@ -47,10 +47,27 @@ class RuntimeAttestation(Record):
     signature: Digest
 
 
-class EvidenceProof(Record):
+class EvidenceReference(Record):
     evidence_id: Identifier
     record_fingerprint: Digest
+
+
+class EvidenceProof(EvidenceReference):
     signature: Digest
+
+
+class EvidenceReport(EvidenceProof):
+    supersedes: EvidenceReference | None = None
+
+
+class OwnershipAssignment(Record):
+    owner_id: Identifier
+    rationale: str = Field(min_length=1, max_length=2000, pattern=r"\S")
+
+
+class Bootstrap(Record):
+    candidate_fingerprint: Digest
+    rationale: str = Field(min_length=1, max_length=2000, pattern=r"\S")
 
 
 class AssessmentRequest(Record):
@@ -92,6 +109,22 @@ class LocalTrust(Record):
     producer_keys: dict[Identifier, Digest] = Field(default_factory=dict)
     runtime_keys: dict[Identifier, Digest] = Field(default_factory=dict)
 
+    @property
+    def fingerprint(self) -> str:
+        # This is the only value persisted. Raw credentials and the preimage stay local.
+        return sha256(canonical_json({
+            "domain": "agent-release-lab/trust/v1",
+            "actors": [
+                {
+                    "id": actor.id, "token_digest": actor.token_digest,
+                    "grants": {role: sorted(set(agents)) for role, agents in actor.grants.items()},
+                }
+                for actor in sorted(self.actors, key=lambda item: item.id)
+            ],
+            "producer_keys": {name: sha256(bytes.fromhex(key)) for name, key in self.producer_keys.items()},
+            "runtime_keys": {name: sha256(bytes.fromhex(key)) for name, key in self.runtime_keys.items()},
+        }))
+
     @model_validator(mode="after")
     def unique_credentials(self) -> Self:
         if any(len({getattr(actor, field) for actor in self.actors}) != len(self.actors)
@@ -107,6 +140,14 @@ def evidence_signature_payload(record: Evidence) -> bytes:
     return canonical_json({
         "domain": "agent-release-lab/evidence/v1",
         "record_fingerprint": record.fingerprint,
+    })
+
+
+def rerun_signature_payload(record: Evidence, predecessor: EvidenceReference) -> bytes:
+    return canonical_json({
+        "domain": "agent-release-lab/evidence-rerun/v1",
+        "record_fingerprint": record.fingerprint,
+        "supersedes": predecessor.model_dump(mode="json"),
     })
 
 

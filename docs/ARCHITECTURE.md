@@ -26,6 +26,8 @@ The Phase 1 [HTTP API](API.md) exposes the SQLite registries, classified compari
 
 The [Phase 2 governance API](GOVERNANCE_API.md) adds an immutable policy registry, agent-scoped policy activation, deterministic assessments, human decisions, and an append-only audit history. The Phase 1 registry and governance records share one SQLite file. Approval reserves the writer slot before reading the active policy and verifying immutable registry inputs. This prevents a concurrent policy or evidence write from changing those inputs before the decision commits.
 
+Assessment selects candidate evidence from the registry and reconciles authenticated producer reports, including explicit remediation links. Baselines refer to historical authorized releases after a one-time first-release bootstrap. The assessment records the owner, trust generation, policy and baseline authority so approval can check that those prerequisites are still current. Deployment authorization is a separate future boundary.
+
 ## Target repository layout
 
 Phase 0 establishes the root documentation and packaging files, `docs/`, the `src/agent_release_lab/` package with its FastAPI entry point, `tests/`, and the Python validation workflow. Add planned directories with their first implementation as the [roadmap](ROADMAP.md) progresses.

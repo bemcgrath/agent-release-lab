@@ -40,3 +40,11 @@
 - Authenticate local producer and verifier claims with separate HMAC keys pinned by the policy. Authenticate accountable human actors through separately provisioned bearer credentials and agent grants.
 - Serialize approval reassessment and audit writes through the SQLite writer transaction. Require fresh assessment after invalidation and separate human release and security approvals for high-risk releases.
 - Execute the 22 documented scenarios with synthetic fixture material. Keep provider identity verification, production key custody and external audit anchoring as separate design work.
+
+## Independent Phase 2 review decisions
+
+- Select evidence from the registry by candidate, mandatory check and accepted suites. Inline proofs supply authentication without limiting selection. Keep producer-reported supersessions immutable and signed over both records. Preserve predecessor records and show supersession in assessment reasons.
+- Require an agent-scoped, audited bootstrap exception for the exact first candidate. For later comparisons require a baseline with a prior successful approval workflow for the same agent. Preserve audit history from earlier development builds without inferring trusted baselines from their assessments.
+- Persist an accountable owner independently of policy and approval roles. Audit owner changes and include the revision in assessment snapshots.
+- Record a non-secret trust fingerprint and persistent generation. Changing or restoring trust invalidates pending approvals, even when the change is unrelated to the candidate.
+- Treat completed decisions as historical. Defer live deployment authorization and its single-use, target-specific authorization mechanism. The service never reports historical approval as an evaluated deployment authorization.

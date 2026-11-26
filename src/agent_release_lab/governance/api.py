@@ -12,7 +12,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from ..api import _json_body
 from ..identity import Digest, Identifier
 from ..registry import Registry
-from .models import Activation, ApprovalRequest, AssessmentRequest, LocalTrust
+from .models import (
+    Activation, ApprovalRequest, AssessmentRequest, Bootstrap, EvidenceReport, LocalTrust, OwnershipAssignment,
+)
 from .policy import Policy
 from .service import Governance, GovernanceInputError, Unauthorized
 
@@ -72,6 +74,25 @@ def configure_governance_routes(app: FastAPI, database_path: Path, trust: LocalT
     @app.get("/v1/governance/agents/{agent_id}/active-policy")
     def active(agent_id: Identifier, actor_id: str = actor):
         return service().active(actor_id, agent_id)
+
+    @app.put("/v1/governance/agents/{agent_id}/owner")
+    def assign_owner(agent_id: Identifier,
+                     request: Annotated[OwnershipAssignment, Depends(_json_body(OwnershipAssignment))],
+                     actor_id: str = actor):
+        return service().assign_owner(actor_id, agent_id, request)
+
+    @app.get("/v1/governance/agents/{agent_id}/owner")
+    def owner(agent_id: Identifier, actor_id: str = actor):
+        return service().owner(actor_id, agent_id)
+
+    @app.post("/v1/governance/agents/{agent_id}/bootstrap")
+    def bootstrap(agent_id: Identifier, request: Annotated[Bootstrap, Depends(_json_body(Bootstrap))],
+                  actor_id: str = actor):
+        return service().bootstrap(actor_id, agent_id, request)
+
+    @app.post("/v1/governance/evidence-reports")
+    def report(request: Annotated[EvidenceReport, Depends(_json_body(EvidenceReport))]):
+        return service().report_evidence(request)
 
     @app.post("/v1/governance/assessments")
     def assess(request: Annotated[AssessmentRequest, Depends(_json_body(AssessmentRequest))], actor_id: str = actor):

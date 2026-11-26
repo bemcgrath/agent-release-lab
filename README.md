@@ -11,7 +11,7 @@ AI evaluates and recommends. Deterministic controls enforce. Authorized humans r
 - Architecture and governance contracts, a research plan, and 22 labeled synthetic scenarios documented for future experiments.
 - Python interfaces for strict manifest and evaluation suite registration, evidence binding and integrity checks, and classified release comparisons. The [release manifest contract](docs/RELEASE_MANIFEST.md) documents the interfaces.
 - Local HTTP endpoints for the registries, release comparison, and evidence verification. See the [HTTP API](docs/API.md) for requests, responses, and database configuration.
-- Deterministic eligibility, versioned policy registration, and scoped human decisions with transactional reassessment and audit history. See the [Governance API](docs/GOVERNANCE_API.md) for the local trust configuration.
+- Deterministic eligibility over the registered evidence inventory, authorized baselines, and scoped human decisions with transactional reassessment and audit history. See the [Governance API](docs/GOVERNANCE_API.md) for local setup and the distinction between historical approval and deployment.
 
 ## Planned capabilities
 
