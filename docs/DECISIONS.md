@@ -48,3 +48,4 @@
 - Persist an accountable owner independently of policy and approval roles. Audit owner changes and include the revision in assessment snapshots.
 - Record a non-secret trust fingerprint and persistent generation. Changing or restoring trust invalidates pending approvals, even when the change is unrelated to the candidate.
 - Treat completed decisions as historical. Defer live deployment authorization and its single-use, target-specific authorization mechanism. The service never reports historical approval as an evaluated deployment authorization.
+- Derive an authorized baseline's policy pin from its approving assessment. Trust changes require an explicit local operator command. Protected HTTP reads and decisions verify the active trust revision instead of activating the worker's local configuration.

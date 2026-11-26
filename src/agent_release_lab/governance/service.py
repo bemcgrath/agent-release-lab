@@ -82,6 +82,10 @@ class Governance:
                 );
                 CREATE INDEX IF NOT EXISTS governance_audit_agent ON governance_audit(agent_id, id);
             """)
+
+    def activate_trust(self) -> dict:
+        """Operator-only transition. HTTP routes never call this method."""
+        with self.registry.transaction(write=True) as db:
             current = self._trust_revision(db)
             if current is None or current["fingerprint"] != self.trust_fingerprint:
                 generation = 1 if current is None else current["generation"] + 1
@@ -89,6 +93,8 @@ class Governance:
                 self._audit(db, None, "trust_configuration_activated", "local-operator", self.clock(), {
                     "trust_fingerprint": self.trust_fingerprint, "trust_generation": generation,
                 })
+                return {"fingerprint": self.trust_fingerprint, "generation": generation}
+            return current
 
     @staticmethod
     def _trust_revision(db):
@@ -107,7 +113,9 @@ class Governance:
         provided = sha256(token.encode("utf-8"))
         for actor in self.actors.values():
             if hmac.compare_digest(actor.token_digest, provided):
-                return actor.id
+                with self.registry.transaction() as db:
+                    self._require_current_trust(db)
+                    return actor.id
         raise Unauthorized("Invalid bearer credential")
 
     def _require_role(self, actor_id: str, role: str, agent_id: str) -> None:
@@ -173,6 +181,7 @@ class Governance:
 
     def get_policy(self, fingerprint: str) -> Policy:
         with self.registry.transaction() as db:
+            self._require_current_trust(db)
             return self._get_policy(db, fingerprint)
 
     @staticmethod
@@ -185,6 +194,7 @@ class Governance:
     def owner(self, actor_id, agent_id):
         self._require_access(actor_id, agent_id)
         with self.registry.transaction() as db:
+            self._require_current_trust(db)
             owner = self._owner(db, agent_id)
         if owner is None:
             raise RecordMissing("Agent has no accountable owner")
@@ -235,12 +245,22 @@ class Governance:
     @staticmethod
     def _baseline_authority(db, agent_id, baseline_fingerprint):
         approved = db.execute(
-            """SELECT assessment_id FROM governance_authorized_releases
-               WHERE agent_id = ? AND candidate_fingerprint = ?""",
+            """SELECT release.assessment_id, assessment.agent_id, assessment.decision
+               FROM governance_authorized_releases AS release
+               JOIN governance_assessments AS assessment ON assessment.id = release.assessment_id
+               WHERE release.agent_id = ? AND release.candidate_fingerprint = ?""",
             (agent_id, baseline_fingerprint),
         ).fetchone()
         if approved is not None:
-            return {"kind": "authorized_release", "assessment_id": approved[0]}
+            assessment_id, approved_agent, stored = approved
+            decision = json.loads(stored)
+            if (approved_agent != agent_id or decision.get("candidate_fingerprint") != baseline_fingerprint
+                    or decision.get("eligibility") != "eligible" or not decision.get("policy_fingerprint")):
+                raise RecordConflict("Approving assessment does not match the baseline")
+            return {
+                "kind": "authorized_release", "assessment_id": assessment_id,
+                "approving_policy_fingerprint": decision["policy_fingerprint"],
+            }
         if db.execute("SELECT 1 FROM governance_authorized_releases WHERE agent_id = ?", (agent_id,)).fetchone():
             return None
         bootstrap = db.execute(
@@ -269,6 +289,7 @@ class Governance:
     def active(self, actor_id: str, agent_id: str) -> dict:
         self._require_access(actor_id, agent_id)
         with self.registry.transaction() as db:
+            self._require_current_trust(db)
             active = self._active(db, agent_id)
         if active is None:
             raise RecordMissing("Agent has no active policy")
@@ -288,13 +309,19 @@ class Governance:
             if authority is None:
                 raise RecordConflict("Baseline lacks prior release authorization or first-release bootstrap")
             current = self._active(db, agent_id)
-            requested = activation.model_dump(mode="json")
+            baseline_policy = authority.get("approving_policy_fingerprint")
+            if baseline_policy is None:
+                baseline_policy = (
+                    current["baseline_policy_fingerprint"]
+                    if current and current["baseline_fingerprint"] == activation.baseline_fingerprint
+                    else activation.policy_fingerprint
+                )
+            else:
+                self._get_policy(db, baseline_policy)
+            requested = activation.model_dump(mode="json") | {"baseline_policy_fingerprint": baseline_policy}
             if current and all(current[key] == value for key, value in requested.items()):
                 return current
             generation = 1 if current is None else current["generation"] + 1
-            baseline_policy = activation.policy_fingerprint
-            if current and current["baseline_fingerprint"] == activation.baseline_fingerprint:
-                baseline_policy = current["baseline_policy_fingerprint"]
             db.execute(
                 """INSERT INTO governance_active VALUES (?, ?, ?, ?, ?, ?)
                    ON CONFLICT (agent_id) DO UPDATE SET policy_fingerprint=excluded.policy_fingerprint,
@@ -387,6 +414,7 @@ class Governance:
             "policy_fingerprint": active["policy_fingerprint"] if active else None,
             "baseline_fingerprint": active["baseline_fingerprint"] if active else None,
             "baseline_authority": None,
+            "baseline_policy_fingerprint": None,
             "trust_fingerprint": trust_revision["fingerprint"],
             "trust_generation": trust_revision["generation"],
             "ownership": owner,
@@ -418,6 +446,9 @@ class Governance:
             return result
         try:
             policy = self._get_policy(db, active["policy_fingerprint"])
+            baseline_policy = self._get_policy(
+                db, authority.get("approving_policy_fingerprint", active["baseline_policy_fingerprint"])
+            )
             baseline = self.registry.get_manifest(active["baseline_fingerprint"])
             activation = Activation.model_validate({
                 key: active[key] for key in ("policy_fingerprint", "baseline_fingerprint", "baseline_metadata")
@@ -430,7 +461,8 @@ class Governance:
         except (RecordMissing, ValueError, RecursionError):
             result["reasons"] = [{"code": "governance_baseline_unverifiable"}]
             return result
-        if active["baseline_policy_fingerprint"] != policy.fingerprint:
+        result["baseline_policy_fingerprint"] = baseline_policy.fingerprint
+        if baseline_policy.fingerprint != policy.fingerprint:
             categories.add("governance")
         result["change_categories"] = sorted(categories)
         result["classification_version"] = comparison.classification_version
@@ -523,12 +555,14 @@ class Governance:
 
     def get_assessment(self, actor_id, assessment_id):
         with self.registry.transaction() as db:
+            self._require_current_trust(db)
             agent, submitter, generation, _, decision = self._assessment(db, assessment_id)
             self._require_access(actor_id, agent)
             return self._view(db, assessment_id, agent, submitter, generation, decision)
 
     def decide(self, actor_id: str, assessment_id: str, approval: ApprovalRequest) -> dict:
         with self.registry.transaction(write=True) as db:
+            trust_revision = self._require_current_trust(db)
             agent, submitter, generation, request, decision = self._assessment(db, assessment_id)
             self._require_role(actor_id, approval.role, agent)
             if actor_id == submitter or approval.role not in decision["required_roles"]:
@@ -543,7 +577,6 @@ class Governance:
                 raise RecordConflict("The approval role already recorded a decision")
             now = self.clock()
             active = self._active(db, agent)
-            trust_revision = self._trust_revision(db)
             try:
                 candidate = self.registry.get_manifest(request.candidate_fingerprint)
                 reassessed = self._evaluate(db, candidate, request, active, now)
@@ -589,6 +622,7 @@ class Governance:
     def audit(self, actor_id: str, agent_id: str, after_id: int = 0) -> list[dict]:
         self._require_access(actor_id, agent_id)
         with self.registry.transaction() as db:
+            self._require_current_trust(db)
             return [
                 {"id": identifier, "agent_id": agent, "event": event, "actor": actor,
                  "occurred_at": timestamp, "details": json.loads(details)}

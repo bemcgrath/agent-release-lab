@@ -181,6 +181,7 @@ def add_evidence(registry, candidate, evaluation_suite, check, case, *, evidence
 def setup(tmp_path, case, clock=lambda: NOW):
     registry = Registry(tmp_path / "ledger.sqlite3")
     service = Governance(registry, trust(), clock)
+    service.activate_trust()
     suites = {name: suite(name) for name in ("S1", "S2")}
     for evaluation_suite in suites.values():
         registry.register_suite(evaluation_suite)
@@ -464,6 +465,7 @@ def test_signed_rerun_cannot_supersede_a_different_check(tmp_path):
 def test_unapproved_baseline_and_bootstrap_bypass_are_rejected(tmp_path):
     registry = Registry(tmp_path / "baseline.sqlite3")
     service = Governance(registry, trust(), lambda: NOW)
+    service.activate_trust()
     baseline = manifest()
     arbitrary = manifest("model")
     for candidate in (baseline, arbitrary):
@@ -509,7 +511,10 @@ def test_unapproved_baseline_and_bootstrap_bypass_are_rejected(tmp_path):
     second = service.assess("submitter", AssessmentRequest.model_validate({
         "candidate_fingerprint": baseline.fingerprint, "runtime": runtime(baseline), "evidence": [proof],
     }))
-    assert second["baseline_authority"] == {"kind": "authorized_release", "assessment_id": first["assessment_id"]}
+    assert second["baseline_authority"] == {
+        "kind": "authorized_release", "assessment_id": first["assessment_id"],
+        "approving_policy_fingerprint": first["policy_fingerprint"],
+    }
 
 
 def test_owner_changes_are_audited_and_do_not_grant_approval(tmp_path):
@@ -542,8 +547,10 @@ def test_trust_changes_invalidate_pending_and_audit_revision(tmp_path, restore_o
         if actor["id"] == "release":
             actor["token_digest"] = sha256(b"synthetic replacement token")
     revised = Governance(service.registry, LocalTrust.model_validate(changed), lambda: NOW)
+    revised.activate_trust()
     assert revised.trust_fingerprint != old_fingerprint
     reviewer = Governance(service.registry, trust(), lambda: NOW) if restore_original else revised
+    reviewer.activate_trust()
     assert reviewer.get_assessment("release", assessment["assessment_id"])["authorization"] == "stale"
     result = reviewer.decide("release", assessment["assessment_id"], approval("release"))
     assert result["authorization"] == "stale"
@@ -556,6 +563,67 @@ def test_trust_changes_invalidate_pending_and_audit_revision(tmp_path, restore_o
     refreshed = reviewer.assess("submitter", request)
     assert reviewer.decide("release", refreshed["assessment_id"], approval("release"))["authorization"] == "approved"
     assert reviewer.audit("admin", AGENT)[-1]["details"]["trust_fingerprint"] == reviewer.trust_fingerprint
+
+
+def test_switching_approved_baseline_and_policy_cannot_skip_governance_controls(tmp_path):
+    service, _, policy, suites = setup(tmp_path, {})
+    candidate = manifest("rules")
+    service.registry.register_manifest(candidate)
+    proof = add_evidence(service.registry, candidate, suites["S1"], "regression", {}, evidence_id="approved-release")
+    request = AssessmentRequest.model_validate({
+        "candidate_fingerprint": candidate.fingerprint, "runtime": runtime(candidate), "evidence": [proof],
+    })
+    approved = service.assess("submitter", request)
+    assert service.decide("release", approved["assessment_id"], approval("release"))["authorization"] == "approved"
+    updated = yaml.safe_load(policy_yaml(suites, ["S1"], revision="r2"))
+    updated["change_controls"]["governance"] = ["isolation"]
+    fingerprint = service.register_policy("admin", Policy.from_yaml(yaml.safe_dump(updated)))
+    active = service.activate("admin", AGENT, Activation(
+        baseline_fingerprint=candidate.fingerprint, policy_fingerprint=fingerprint,
+    ))
+    assert active["baseline_policy_fingerprint"] == policy.fingerprint
+    result = service.assess("submitter", request)
+    assert result["baseline_authority"]["approving_policy_fingerprint"] == approved["policy_fingerprint"]
+    assert result["change_categories"] == ["governance"]
+    assert result["eligibility"] == "blocked"
+    assert {"code": "evidence_missing", "control": "isolation"} in result["reasons"]
+
+    # Read the approving assessment even if an earlier build persisted the wrong pin.
+    with sqlite3.connect(service.registry.path) as db:
+        db.execute("UPDATE governance_active SET baseline_policy_fingerprint = ?", (fingerprint,))
+    assert service.assess("submitter", request)["eligibility"] == "blocked"
+
+
+def test_stale_servers_cannot_restore_trust_or_mutate_current_assessment(tmp_path):
+    service, request, _, _ = setup(tmp_path, {})
+    idle_app = create_app(service.registry.path, trust=trust())
+    cached_app = create_app(service.registry.path, trust=trust())
+
+    async def get(client_app, bearer):
+        async with AsyncClient(transport=ASGITransport(app=client_app), base_url="http://test") as client:
+            return await client.get(
+                f"/v1/governance/agents/{AGENT}/active-policy", headers={"Authorization": f"Bearer {bearer}"},
+            )
+
+    assert asyncio.run(get(cached_app, token("release"))).status_code == 200
+    changed = trust().model_dump()
+    fresh_token = "synthetic-replacement-token"
+    next(actor for actor in changed["actors"] if actor["id"] == "release")["token_digest"] = sha256(fresh_token.encode())
+    rotated_trust = LocalTrust.model_validate(changed)
+    rotated = Governance(service.registry, rotated_trust, lambda: NOW)
+    activated = rotated.activate_trust()
+    fresh = rotated.assess("submitter", request)
+    assert asyncio.run(get(idle_app, "invalid-token")).status_code == 401
+    assert asyncio.run(get(idle_app, token("release"))).status_code == 409
+    assert asyncio.run(get(cached_app, token("release"))).status_code == 409
+    with pytest.raises(RecordConflict, match="trust configuration is stale"):
+        service.decide("release", fresh["assessment_id"], approval("release"))
+    assert rotated.get_assessment("release", fresh["assessment_id"])["authorization"] == "pending"
+    assert rotated.activate_trust() == activated
+    current_app = create_app(service.registry.path, trust=rotated_trust)
+    assert asyncio.run(get(current_app, token("release"))).status_code == 401
+    assert asyncio.run(get(current_app, fresh_token)).status_code == 200
+    assert rotated.decide("release", fresh["assessment_id"], approval("release"))["authorization"] == "approved"
 
 
 def test_governance_rest_flow(tmp_path):

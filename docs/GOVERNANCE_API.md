@@ -14,7 +14,13 @@ Set `AGENT_RELEASE_LAB_TRUST` to the path of a local UTF-8 JSON configuration fi
 
 Use distinct, random credentials and signing keys. An actor's client sends `Authorization: Bearer <token>`. Tokens identify actors independently of request bodies. Roles are `policy_admin`, `submitter`, `release`, and `security`. An agent-scoped administrator may set that agent's baseline and active policy. Any administrator with at least one grant may register a global policy revision. Policy lookup is available to authenticated actors. Assessments, active configuration, and audit history require an agent grant. Separate actor credentials represent separate accountable humans.
 
-Restart the server to load trust changes. The service records a non-secret aggregate fingerprint and monotonically increasing generation when trust changes. Keys and individual token digests stay out of the audit. A process with a different trust fingerprint cannot write governance decisions. Pending approvals require reassessment after any trust change, including a change followed by rollback.
+Before starting governance for the first time or rotating credentials, run the operator command from the same working directory and with the same database and trust configuration environment variables as the server.
+
+```powershell
+.\.venv\Scripts\python.exe -m agent_release_lab.governance.trust activate
+```
+
+Then start or restart the server to load that configuration. The command records a non-secret aggregate fingerprint and monotonically increasing generation. Keys and individual token digests stay out of the audit. HTTP requests cannot activate or replace trust. A server whose local configuration differs from the active revision cannot serve protected reads or change governance state. Pending approvals require reassessment after any trust change, including a change followed by rollback.
 
 ## Endpoints
 
@@ -37,7 +43,7 @@ Requests besides policy registration use the Phase 1 strict JSON boundary. Gover
 
 ## Establish the first baseline
 
-An agent-scoped administrator assigns an accountable configured human owner and registers the first scoped manifest. Post its exact fingerprint and a rationale to `/bootstrap`; then activate the policy with that same fingerprint as the baseline. This exception permits evaluation of the first candidate through the ordinary gate and human approval workflow. It cannot serve as the baseline for another candidate. Once approved, the first release becomes an authorized baseline. Future activation accepts only releases previously approved for the same agent. Ownership alone grants no approval or administration rights.
+An agent-scoped administrator assigns an accountable configured human owner and registers the first scoped manifest. Post its exact fingerprint and a rationale to `/bootstrap`; then activate the policy with that same fingerprint as the baseline. This exception permits evaluation of the first candidate through the ordinary gate and human approval workflow. It cannot serve as the baseline for another candidate. Once approved, the first release becomes an authorized baseline. Future activation accepts only releases previously approved for the same agent and pins the baseline to its approving assessment's policy. Ownership alone grants no approval or administration rights.
 
 ## Build an assessment request
 
