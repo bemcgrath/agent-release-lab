@@ -213,3 +213,38 @@ def test_provider_diagnostics_are_sanitized(monkeypatch, failure, diagnostic):
     for secret in ("synthetic-token", "private-url", "synthetic-message",
                    "synthetic-provider-body", "synthetic-network-detail"):
         assert secret not in encoded
+
+
+@pytest.mark.parametrize("finding_id, status", [("coverage-gap", "completed"), ("invalid id", "rejected")])
+def test_gemini_uses_compact_wire_schema_without_weakening_local_validation(monkeypatch, finding_id, status):
+    from agent_release_lab.reviewers import providers
+
+    class Transport:
+        def open(self, request, timeout):
+            payload = json.loads(request.data)
+            schema = payload["response_format"]["json_schema"]["schema"]
+            finding = schema["properties"]["findings"]["items"]
+            assert finding["additionalProperties"] is False
+            assert finding["properties"]["uncertainty"] == {"type": ["string", "null"]}
+            assert finding["properties"]["confidence"] == {"type": "integer"}
+            assert set(finding["required"]) == finding["properties"].keys()
+            for keyword in ("$ref", "$defs", "pattern", "maxItems", "minLength"):
+                assert json.dumps(keyword) not in json.dumps(schema)
+            output = json.dumps({"findings": [{
+                "id": finding_id, "category": "insufficient_testing", "severity": "medium",
+                "description": "Coverage missing.", "remediation": "Run the required check.",
+                "confidence": 75, "evidence": [], "uncertainty": "No evidence is available.",
+            }]})
+            return BytesIO(json.dumps({
+                "model": "gemini-3.5-flash-lite", "usage": {"prompt_tokens": 7, "completion_tokens": 3},
+                "choices": [{"finish_reason": "stop", "message": {"content": output}}],
+            }).encode())
+
+    monkeypatch.setattr(providers, "build_opener", lambda *args: Transport())
+    config = ReviewerConfig(provider="chat-completions", model="gemini-3.5-flash-lite",
+                            endpoint="https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+                            response_format="json_schema")
+    result = evaluate_snapshot(b'{"evidence":[]}', "test", config, ChatCompletions(config.endpoint, None))
+    assert result["status"] == status
+    if status == "rejected":
+        assert result["validation_issue_types"] == ["string_pattern_mismatch"]

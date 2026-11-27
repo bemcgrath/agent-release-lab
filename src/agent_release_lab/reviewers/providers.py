@@ -37,10 +37,32 @@ def _http_failure(status: int) -> ProviderFailure:
     return ProviderFailure(kind, status)
 
 
-def response_format(kind: str) -> dict:
+def _gemini_schema(schema: dict) -> dict:
+    """Project to a compact provider schema. Local Findings validation stays authoritative."""
+    definitions = schema["$defs"]
+
+    def project(node: dict) -> dict:
+        if "$ref" in node:
+            return project(definitions[node["$ref"].removeprefix("#/$defs/")])
+        if "anyOf" in node:
+            return {"type": [variant["type"] for variant in node["anyOf"]]}
+        result = {key: node[key] for key in ("type", "enum", "required", "additionalProperties") if key in node}
+        if "properties" in node:
+            result["properties"] = {name: project(child) for name, child in node["properties"].items()}
+        if "items" in node:
+            result["items"] = project(node["items"])
+        return result
+
+    return project(schema)
+
+
+def response_format(kind: str, endpoint: str | None = None) -> dict:
     if kind == "json_schema":
+        schema = Findings.model_json_schema()
+        if endpoint and urlsplit(endpoint).hostname == "generativelanguage.googleapis.com":
+            schema = _gemini_schema(schema)
         return {"type": kind, "json_schema": {
-            "name": "release_findings", "strict": True, "schema": Findings.model_json_schema(),
+            "name": "release_findings", "strict": True, "schema": schema,
         }}
     return {"type": "json_object"}
 
@@ -71,7 +93,7 @@ class ChatCompletions:
                 {"role": "system", "content": request.instructions},
                 {"role": "user", "content": request.snapshot.decode("utf-8")},
             ],
-            "response_format": response_format(request.response_format),
+            "response_format": response_format(request.response_format, self.endpoint),
             "max_completion_tokens": request.max_output_tokens,
         }
         try:

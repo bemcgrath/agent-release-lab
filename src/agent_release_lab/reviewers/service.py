@@ -44,7 +44,7 @@ BOUNDARY = (
 WORKERS = ThreadPoolExecutor(max_workers=2, thread_name_prefix="advisory-review")
 SLOTS = BoundedSemaphore(2)
 MODEL_ID = TypeAdapter(Identifier)
-ADAPTER_REVISIONS = {"fake": "fake-v1", "chat-completions": "chat-completions-v2"}
+ADAPTER_REVISIONS = {"fake": "fake-v1", "chat-completions": "chat-completions-v3"}
 RETAINED_OUTPUT_BYTES = 16384
 
 
@@ -191,8 +191,11 @@ def evaluate_snapshot(
         "budget": {"limit_tokens": config.cumulative_token_budget, "reserved_tokens": 0, "charged_tokens": 0},
     }
     input_bytes = len(snapshot) + len(instructions.encode("utf-8"))
+    schema_fingerprint = None
     if config.response_format == "json_schema":
-        input_bytes += len(canonical_json(response_format(config.response_format)))
+        schema_bytes = canonical_json(response_format(config.response_format, config.endpoint))
+        input_bytes += len(schema_bytes)
+        schema_fingerprint = sha256(schema_bytes)
     # Use a conservative byte-based budget with message framing headroom before calling out.
     remaining = config.max_total_tokens - input_bytes - 256
     if input_bytes > config.max_input_bytes or remaining < 1:
@@ -205,6 +208,7 @@ def evaluate_snapshot(
         "model": request.model, "timeout_seconds": request.timeout_seconds,
         "max_output_tokens": request.max_output_tokens, "sampling": "provider_defaults",
         "response_format": request.response_format,
+        "response_format_fingerprint": schema_fingerprint,
     }
     if reserve is not None:
         if not reserve(result["id"], config.max_total_tokens):
