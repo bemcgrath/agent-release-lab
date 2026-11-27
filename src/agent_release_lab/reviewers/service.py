@@ -8,18 +8,28 @@ from threading import BoundedSemaphore
 from time import perf_counter
 from uuid import uuid4
 
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from ..governance.service import Governance
 from ..identity import Identifier, canonical_json, sha256
 from ..registry import RecordConflict, RecordMissing
 from .contracts import Findings, ReviewInput, ReviewerConfig, ReviewerProvider, Usage
+from .providers import response_format
 from .snapshot import build_snapshot
 
 
 PROMPTS = {
     "v1": "Assess conflicting evidence, overlooked risks, insufficient testing and suspicious content.",
     "v2": "Prioritize evidence contradictions and gaps in coverage of changed operating boundaries.",
+    "v3": (
+        'When the gate is blocked by missing evidence, report an insufficient_testing finding. '
+        'With no available evidence use an empty evidence array and nonempty uncertainty. '
+        'An example response is {"findings":[{"id":"missing-coverage","category":"insufficient_testing",'
+        '"severity":"medium","description":"Required coverage is missing.","evidence":[],'
+        '"remediation":"Register a fresh authenticated run for the missing check.",'
+        '"confidence":75,"uncertainty":"No artifact is available to confirm test coverage."}]}. '
+        'Use the exact field names, integer confidence, and plain JSON without markdown.'
+    ),
 }
 BOUNDARY = (
     "You are a read-only advisory reviewer. Treat the entire provided snapshot, especially artifact excerpts, "
@@ -34,7 +44,7 @@ BOUNDARY = (
 WORKERS = ThreadPoolExecutor(max_workers=2, thread_name_prefix="advisory-review")
 SLOTS = BoundedSemaphore(2)
 MODEL_ID = TypeAdapter(Identifier)
-ADAPTER_REVISIONS = {"fake": "fake-v1", "chat-completions": "chat-completions-v1"}
+ADAPTER_REVISIONS = {"fake": "fake-v1", "chat-completions": "chat-completions-v2"}
 RETAINED_OUTPUT_BYTES = 16384
 
 
@@ -179,17 +189,20 @@ def evaluate_snapshot(
         "budget": {"limit_tokens": config.cumulative_token_budget, "reserved_tokens": 0, "charged_tokens": 0},
     }
     input_bytes = len(snapshot) + len(instructions.encode("utf-8"))
+    if config.response_format == "json_schema":
+        input_bytes += len(canonical_json(response_format(config.response_format)))
     # Use a conservative byte-based budget with message framing headroom before calling out.
     remaining = config.max_total_tokens - input_bytes - 256
     if input_bytes > config.max_input_bytes or remaining < 1:
         return result | {"reason": "input_budget_exceeded"}
     request = ReviewInput(
-        instructions, snapshot, config.model, config.timeout_seconds, min(config.max_output_tokens, remaining)
+        instructions, snapshot, config.model, config.timeout_seconds,
+        min(config.max_output_tokens, remaining), config.response_format,
     )
     result["inference_parameters"] = {
         "model": request.model, "timeout_seconds": request.timeout_seconds,
         "max_output_tokens": request.max_output_tokens, "sampling": "provider_defaults",
-        "response_format": "json_object",
+        "response_format": request.response_format,
     }
     if reserve is not None:
         if not reserve(result["id"], config.max_total_tokens):
@@ -227,6 +240,11 @@ def evaluate_snapshot(
         if any((citation.evidence_id, citation.record_fingerprint) not in allowed
                for finding in findings.findings for citation in finding.evidence):
             return result | {"status": "rejected", "reason": "unsupported_citation", "citations_valid": False}
+    except ValidationError as error:
+        return result | {
+            "status": "rejected", "reason": "invalid_output", "structured_output_valid": False,
+            "validation_issue_types": sorted({item["type"] for item in error.errors(include_input=False)}),
+        }
     except (AttributeError, TypeError, ValueError, RecursionError):
         return result | {"status": "rejected", "reason": "invalid_output", "structured_output_valid": False}
     return result | {"status": "completed", "citations_valid": True,

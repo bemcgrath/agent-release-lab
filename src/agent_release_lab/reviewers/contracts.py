@@ -14,7 +14,8 @@ Text = Annotated[str, StringConstraints(min_length=1, max_length=2000, strip_whi
 class ReviewerConfig(Record):
     provider: Literal["fake", "chat-completions"] = "fake"
     model: Identifier = "ledger-fake-v1"
-    prompt_version: Literal["v1", "v2"] = "v1"
+    prompt_version: Literal["v1", "v2", "v3"] = "v1"
+    response_format: Literal["json_object", "json_schema"] = "json_object"
     timeout_seconds: int = Field(default=15, ge=1, le=120)
     max_input_bytes: int = Field(default=48000, ge=512, le=262144)
     max_output_tokens: int = Field(default=1800, ge=32, le=8192)
@@ -92,6 +93,7 @@ class ReviewInput:
     model: str
     timeout_seconds: int
     max_output_tokens: int
+    response_format: Literal["json_object", "json_schema"] = "json_object"
 
 
 @dataclass(frozen=True)

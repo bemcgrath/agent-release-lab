@@ -12,7 +12,8 @@ The default provider is `fake`. Set `AGENT_RELEASE_LAB_REVIEWER_CONFIG` to a loc
 | --- | --- | --- |
 | `provider` | `fake` | `fake` or `chat-completions` |
 | `model` | `ledger-fake-v1` | Requested model ID. Supply it explicitly for an external provider. |
-| `prompt_version` | `v1` | Versioned built-in prompt, `v1` or `v2` |
+| `prompt_version` | `v1` | Versioned built-in prompt. `v3` includes a missing-evidence example. |
+| `response_format` | `json_object` | Use `json_schema` with compatible endpoints to request the Findings schema. Local validation always runs. |
 | `timeout_seconds` | 15 | Per-call wall-clock timeout, from 1 to 120 seconds |
 | `max_input_bytes` | 48000 | Limit for the prompt and canonical snapshot together |
 | `max_output_tokens` | 1800 | Maximum output requested from the provider before applying the total budget |
@@ -35,7 +36,7 @@ The opt-in smoke command exercises one chat-completions model against all five i
 .\.venv\Scripts\python.exe -m agent_release_lab.reviewers.smoke --allow-charges --config reviewer.json --input-usd-per-million INPUT_RATE --output-usd-per-million OUTPUT_RATE
 ```
 
-Replace `INPUT_RATE` and `OUTPUT_RATE` with numeric rates. The command emits JSON containing scenario, requested and returned model, structured-output and citation validity, usage source and counts, latency, and estimated USD cost. Unknown usage leaves cost unset. The batch verifies capacity for five reservations before the first call and exits nonzero if any scenario fails. The automated tests exercise the smoke command and all scenarios with local stubs. A live service run requires separate authorization and is pending.
+Replace `INPUT_RATE` and `OUTPUT_RATE` with numeric rates. Add `--scenario blocked` to run only that scenario. The command emits JSON containing scenario, requested and returned model, structured-output and citation validity, usage source and counts, latency, and estimated USD cost. Unknown usage leaves cost unset. The batch verifies capacity for the selected scenarios before the first call and exits nonzero if any fails. Validation errors report error types without copying raw model text.
 
 ## Reviewer contract
 

@@ -7,7 +7,15 @@ from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from ..identity import canonical_json
-from .contracts import ProviderReply, ReviewInput, Usage
+from .contracts import Findings, ProviderReply, ReviewInput, Usage
+
+
+def response_format(kind: str) -> dict:
+    if kind == "json_schema":
+        return {"type": kind, "json_schema": {
+            "name": "release_findings", "strict": True, "schema": Findings.model_json_schema(),
+        }}
+    return {"type": "json_object"}
 
 
 class ChatCompletions:
@@ -36,7 +44,7 @@ class ChatCompletions:
                 {"role": "system", "content": request.instructions},
                 {"role": "user", "content": request.snapshot.decode("utf-8")},
             ],
-            "response_format": {"type": "json_object"},
+            "response_format": response_format(request.response_format),
             "max_completion_tokens": request.max_output_tokens,
         }
         with build_opener(NoRedirect()).open(

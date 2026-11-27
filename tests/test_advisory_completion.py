@@ -15,6 +15,7 @@ from agent_release_lab.identity import sha256
 from agent_release_lab.registry import RecordConflict, Registry
 from agent_release_lab.reviewers.contracts import ProviderReply, ReviewerConfig, Usage
 from agent_release_lab.reviewers.service import AdvisoryStore
+from agent_release_lab.reviewers.providers import response_format
 from agent_release_lab.reviewers.smoke import run_smoke
 from agent_release_lab.reviewers.snapshot import build_snapshot
 from test_governance import NOW, setup, trust
@@ -141,3 +142,30 @@ def test_smoke_requires_explicit_charge_approval_and_covers_all_scenarios(tmp_pa
     assert provider.calls == 5
     assert all(report["structured_output_valid"] and report["citations_valid"] for report in reports)
     assert all(report["estimated_cost_usd"] == "0.000013" for report in reports)
+
+
+@pytest.mark.parametrize("confidence", [75, "75"])
+def test_blocked_only_smoke_uses_schema_and_keeps_strict_validation(confidence):
+    class BlockedProvider(Provider):
+        def review(self, request):
+            self.calls += 1
+            assert "empty evidence array and nonempty uncertainty" in request.instructions
+            assert request.response_format == "json_schema"
+            schema = response_format(request.response_format)["json_schema"]["schema"]
+            assert schema["$defs"]["Finding"]["properties"]["confidence"]["type"] == "integer"
+            assert schema["$defs"]["Finding"]["additionalProperties"] is False
+            return ProviderReply(json.dumps({"findings": [{
+                "id": "missing-coverage", "category": "insufficient_testing", "severity": "medium",
+                "description": "Required coverage is missing.", "evidence": [],
+                "remediation": "Register a verified run.", "confidence": confidence,
+                "uncertainty": "No artifact is available to confirm coverage.",
+            }]}).encode(), "synthetic-served-r1", Usage(input_tokens=7, output_tokens=3, source="provider"))
+
+    provider = BlockedProvider()
+    config = ReviewerConfig(prompt_version="v3", response_format="json_schema", cumulative_token_budget=52000)
+    result, = run_smoke(config, provider, Decimal("1"), Decimal("2"), scenario="blocked")
+    assert provider.calls == 1 and result["scenario"] == "blocked"
+    if isinstance(confidence, int):
+        assert result["status"] == "completed" and result["citations_valid"]
+    else:
+        assert result["status"] == "rejected" and result["validation_issue_types"] == ["int_type"]

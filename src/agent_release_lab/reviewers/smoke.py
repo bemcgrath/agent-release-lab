@@ -14,12 +14,16 @@ from .providers import ChatCompletions
 SCENARIOS = ("ready", "blocked", "suspicious", "conflict", "approved")
 
 
-def run_smoke(config: ReviewerConfig, provider: ReviewerProvider, input_rate: Decimal, output_rate: Decimal) -> list[dict]:
-    if len(SCENARIOS) * config.max_total_tokens > config.cumulative_token_budget:
-        raise ValueError("The cumulative budget must cover five full per-call reservations")
+def run_smoke(config: ReviewerConfig, provider: ReviewerProvider, input_rate: Decimal, output_rate: Decimal,
+              *, scenario: str | None = None) -> list[dict]:
+    scenarios = SCENARIOS if scenario is None else (scenario,)
+    if scenario is not None and scenario not in SCENARIOS:
+        raise ValueError("Unknown Ledger Finch scenario")
+    if len(scenarios) * config.max_total_tokens > config.cumulative_token_budget:
+        raise ValueError("The cumulative budget must cover the selected scenario reservations")
     remaining = config.cumulative_token_budget
     reports = []
-    for scenario in SCENARIOS:
+    for scenario in scenarios:
         if remaining < config.max_total_tokens:
             reports.append({"scenario": scenario, "status": "unavailable", "reason": "cumulative_budget_exceeded"})
             continue
@@ -54,6 +58,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--allow-charges", action="store_true", help="Confirm maintainer authorization for billable calls")
     parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--scenario", choices=SCENARIOS, help="Limit the smoke run to one scenario")
     parser.add_argument("--input-usd-per-million", type=rate, required=True)
     parser.add_argument("--output-usd-per-million", type=rate, required=True)
     args = parser.parse_args()
@@ -64,7 +69,8 @@ def main() -> int:
         if config.provider != "chat-completions":
             parser.error("Live smoke requires the chat-completions provider")
         provider = ChatCompletions(config.endpoint, environ.get("AGENT_RELEASE_LAB_REVIEWER_TOKEN"))
-        reports = run_smoke(config, provider, args.input_usd_per_million, args.output_usd_per_million)
+        reports = run_smoke(config, provider, args.input_usd_per_million, args.output_usd_per_million,
+                            scenario=args.scenario)
     except (OSError, ValueError, RecursionError):
         parser.error("Live smoke configuration or budget is invalid")
     print(json.dumps({"schema_version": 1, "scenarios": reports}, indent=2))
