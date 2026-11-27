@@ -38,6 +38,8 @@ The opt-in smoke command exercises one chat-completions model against all five i
 
 Replace `INPUT_RATE` and `OUTPUT_RATE` with numeric rates. Add `--scenario blocked` to run only that scenario. The command emits JSON containing scenario, requested and returned model, structured-output and citation validity, usage source and counts, latency, and estimated USD cost. Unknown usage leaves cost unset. The batch verifies capacity for the selected scenarios before the first call and exits nonzero if any fails. Validation errors report error types without copying raw model text.
 
+An unavailable result can include `provider_error`, with a fixed diagnostic category and an HTTP status when available. This distinguishes rejected requests, credential or permission failures, quota or billing, network errors, timeouts, and invalid response envelopes. Diagnostics omit endpoint URLs, credentials, headers, exception messages and provider error bodies. An HTTP status identifies the class of failure and does not establish the provider's specific cause. Requests are never retried automatically.
+
 ## Reviewer contract
 
 A review request identifies an existing deterministic assessment. The service constructs canonical immutable bytes from its recorded gate result, pinned candidate and baseline, applicable policy controls, and recorded evidence references. It checks the available registry record and artifact against the candidate and evidence fingerprint before including an excerpt of at most 512 bytes. Evidence registered later is outside the assessment snapshot. Unavailable entries remain visible with their identifiers and can neither provide excerpts nor serve as citations.

@@ -1,11 +1,13 @@
 """Completion checks for advisory authorization, accounting and smoke validation."""
 
 import json
+from io import BytesIO
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from threading import Event
+from urllib.error import HTTPError, URLError
 
 import pytest
 
@@ -14,8 +16,8 @@ from agent_release_lab.governance.service import Governance
 from agent_release_lab.identity import sha256
 from agent_release_lab.registry import RecordConflict, Registry
 from agent_release_lab.reviewers.contracts import ProviderReply, ReviewerConfig, Usage
-from agent_release_lab.reviewers.service import AdvisoryStore
-from agent_release_lab.reviewers.providers import response_format
+from agent_release_lab.reviewers.service import AdvisoryStore, evaluate_snapshot
+from agent_release_lab.reviewers.providers import ChatCompletions, response_format
 from agent_release_lab.reviewers.smoke import run_smoke
 from agent_release_lab.reviewers.snapshot import build_snapshot
 from test_governance import NOW, setup, trust
@@ -169,3 +171,45 @@ def test_blocked_only_smoke_uses_schema_and_keeps_strict_validation(confidence):
         assert result["status"] == "completed" and result["citations_valid"]
     else:
         assert result["status"] == "rejected" and result["validation_issue_types"] == ["int_type"]
+
+
+@pytest.mark.parametrize("failure, diagnostic", [
+    (400, {"kind": "request_rejected", "http_status": 400}),
+    (401, {"kind": "authentication_or_permission", "http_status": 401}),
+    (429, {"kind": "billing_or_quota", "http_status": 429}),
+    (503, {"kind": "upstream_error", "http_status": 503}),
+    ("network", {"kind": "network_error"}),
+    ("timeout", {"kind": "network_timeout"}),
+    ("envelope", {"kind": "invalid_response_envelope"}),
+])
+def test_provider_diagnostics_are_sanitized(monkeypatch, failure, diagnostic):
+    from agent_release_lab.reviewers import providers
+
+    class Response(BytesIO):
+        def read(self, size=-1):
+            return b'{"unexpected":"synthetic-provider-body"}'
+
+    class Transport:
+        def open(self, request, timeout):
+            assert request.get_header("Authorization") == "Bearer synthetic-token"
+            if isinstance(failure, int):
+                raise HTTPError("https://synthetic.example/private-url", failure,
+                                "synthetic-message", {}, BytesIO(b"synthetic-provider-body"))
+            if failure == "network":
+                raise URLError("synthetic-network-detail")
+            if failure == "timeout":
+                raise URLError(TimeoutError("synthetic-network-detail"))
+            return Response()
+
+    monkeypatch.setattr(providers, "build_opener", lambda *args: Transport())
+    config = ReviewerConfig(provider="chat-completions", model="synthetic-model",
+                            endpoint="https://synthetic.example/chat/completions")
+    result = evaluate_snapshot(b'{"evidence":[]}', "test", config,
+                               ChatCompletions(config.endpoint, "synthetic-token"))
+    assert result["reason"] == "provider_unavailable"
+    assert result["provider_error"] == diagnostic
+    assert result["usage"]["source"] == "unknown"
+    encoded = json.dumps(result)
+    for secret in ("synthetic-token", "private-url", "synthetic-message",
+                   "synthetic-provider-body", "synthetic-network-detail"):
+        assert secret not in encoded

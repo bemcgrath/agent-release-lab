@@ -189,6 +189,10 @@ function renderAdvisory(reviews) {
   panel.append(trace);
   if (review.status !== "completed") {
     panel.append(empty(words(review.reason)));
+    if (review.provider_error) {
+      const error = review.provider_error;
+      panel.append(empty(words(error.kind) + (error.http_status ? " · HTTP " + error.http_status : "")));
+    }
   } else if (!review.findings.length) {
     panel.append(empty("The reviewer returned no findings for this snapshot."));
   } else {

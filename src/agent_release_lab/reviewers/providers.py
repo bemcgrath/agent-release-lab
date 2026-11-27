@@ -2,12 +2,39 @@
 
 import json
 import re
-from urllib.error import HTTPError
+from ssl import SSLError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from ..identity import canonical_json
 from .contracts import Findings, ProviderReply, ReviewInput, Usage
+
+
+class ProviderFailure(Exception):
+    """A provider failure with safe metadata and no transport or response text."""
+
+    def __init__(self, kind: str, http_status: int | None = None):
+        super().__init__(kind)
+        self.diagnostic = {"kind": kind}
+        if http_status is not None:
+            self.diagnostic["http_status"] = http_status
+
+
+def _http_failure(status: int) -> ProviderFailure:
+    if 300 <= status < 400:
+        kind = "redirect_blocked"
+    elif status in {401, 403}:
+        kind = "authentication_or_permission"
+    elif status in {402, 429}:
+        kind = "billing_or_quota"
+    elif status in {408, 504}:
+        kind = "upstream_timeout"
+    elif 400 <= status < 500:
+        kind = "request_rejected"
+    else:
+        kind = "upstream_error"
+    return ProviderFailure(kind, status)
 
 
 def response_format(kind: str) -> dict:
@@ -47,15 +74,31 @@ class ChatCompletions:
             "response_format": response_format(request.response_format),
             "max_completion_tokens": request.max_output_tokens,
         }
-        with build_opener(NoRedirect()).open(
-            Request(self.endpoint, data=canonical_json(payload), headers=headers), timeout=request.timeout_seconds
-        ) as response:
-            raw = response.read(262145)
+        try:
+            with build_opener(NoRedirect()).open(
+                Request(self.endpoint, data=canonical_json(payload), headers=headers), timeout=request.timeout_seconds
+            ) as response:
+                raw = response.read(262145)
+        except HTTPError as error:
+            error.close()
+            raise _http_failure(error.code) from None
+        except (URLError, OSError) as error:
+            cause = error.reason if isinstance(error, URLError) else error
+            kind = "network_timeout" if isinstance(cause, TimeoutError) else (
+                "tls_error" if isinstance(cause, SSLError) else "network_error"
+            )
+            raise ProviderFailure(kind) from None
         if len(raw) > 262144:
-            raise ValueError("Provider response envelope is too large")
-        data = json.loads(raw)
-        choice = data["choices"][0]
-        message = choice["message"]
+            raise ProviderFailure("response_too_large")
+        try:
+            data = json.loads(raw)
+            choice = data["choices"][0]
+            message = choice["message"]
+            model = data["model"]
+            if not isinstance(message, dict) or not isinstance(model, str):
+                raise ValueError
+        except (ValueError, TypeError, KeyError, IndexError, RecursionError):
+            raise ProviderFailure("invalid_response_envelope") from None
         content = message.get("content")
         complete = (
             choice.get("finish_reason") == "stop" and isinstance(content, str)
@@ -67,7 +110,7 @@ class ChatCompletions:
         except (KeyError, TypeError, ValueError):
             usage = Usage(input_tokens=None, output_tokens=None, source="unknown")
         return ProviderReply(
-            content.encode("utf-8") if isinstance(content, str) else b"", data["model"], usage, complete,
+            content.encode("utf-8") if isinstance(content, str) else b"", model, usage, complete,
         )
 
 

@@ -14,7 +14,7 @@ from ..governance.service import Governance
 from ..identity import Identifier, canonical_json, sha256
 from ..registry import RecordConflict, RecordMissing
 from .contracts import Findings, ReviewInput, ReviewerConfig, ReviewerProvider, Usage
-from .providers import response_format
+from .providers import ProviderFailure, response_format
 from .snapshot import build_snapshot
 
 
@@ -151,20 +151,22 @@ class AdvisoryStore:
 
 def _request_review(provider: ReviewerProvider, request: ReviewInput):
     if not SLOTS.acquire(blocking=False):
-        return None, "reviewer_busy"
+        return None, "reviewer_busy", None
     try:
         future = WORKERS.submit(provider.review, request)
     except Exception:
         SLOTS.release()
-        return None, "provider_unavailable"
+        return None, "provider_unavailable", {"kind": "worker_unavailable"}
     future.add_done_callback(lambda _: SLOTS.release())
     try:
-        return future.result(timeout=request.timeout_seconds), None
+        return future.result(timeout=request.timeout_seconds), None, None
+    except ProviderFailure as error:
+        return None, "provider_unavailable", error.diagnostic
     except TimeoutError:
         future.cancel()
-        return None, "provider_timeout"
+        return None, "provider_timeout", {"kind": "review_deadline"}
     except Exception:
-        return None, "provider_unavailable"
+        return None, "provider_unavailable", {"kind": "adapter_error"}
 
 
 def evaluate_snapshot(
@@ -209,10 +211,10 @@ def evaluate_snapshot(
             return result | {"reason": "cumulative_budget_exceeded"}
         result["budget"]["reserved_tokens"] = config.max_total_tokens
     started = perf_counter()
-    reply, error = _request_review(provider, request)
+    reply, error, diagnostic = _request_review(provider, request)
     result["latency_ms"] = int((perf_counter() - started) * 1000)
     if error:
-        return result | {"reason": error}
+        return result | {"reason": error, "provider_error": diagnostic}
 
     try:
         usage = Usage.model_validate(reply.usage)
