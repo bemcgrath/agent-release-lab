@@ -32,7 +32,7 @@ def assessment_detail(governance, store, actor_id: str, assessment_id: str) -> d
     return {
         "assessment": assessment,
         "candidate": snapshot["candidate"],
-        "changes": snapshot["changes"],
+        "changes": assessment.get("comparison"),
         "controls": snapshot["controls"],
         "evidence": [hide_artifact(item) for item in snapshot["evidence"]],
         "reviews": store.list(actor_id, assessment_id),

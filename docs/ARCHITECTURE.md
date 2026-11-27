@@ -30,6 +30,8 @@ Assessment selects candidate evidence from the registry and reconciles authentic
 
 The [Phase 3 advisory reviewer](ADVISORY_REVIEW.md) builds immutable snapshots from recorded assessments. A provider receives text instructions and JSON bytes with bounded artifact excerpts. Schema and citation validation runs before findings enter the append-only advisory table. The dashboard reads governed state and advisory history separately. Its synthetic demonstration uses the same deterministic workflow and fake provider against an isolated temporary database.
 
+The snapshot includes the recorded owner, baseline authority, trust generation, runtime attestation summary and supersession links. Opaque runtime and security settings are excluded. A separate usage ledger reserves capacity in SQLite before provider calls and settles usage even if trust changes during a call. Trust and scope are checked again inside the transaction that persists advisory results.
+
 ## Target repository layout
 
 Phase 0 establishes the root documentation and packaging files, `docs/`, the `src/agent_release_lab/` package with its FastAPI entry point, `tests/`, and the Python validation workflow. Add planned directories with their first implementation as the [roadmap](ROADMAP.md) progresses.

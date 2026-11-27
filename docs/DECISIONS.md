@@ -57,3 +57,6 @@
 - Use a credential-free deterministic provider by default. Make external text-only chat completions opt-in with time, size, usage and concurrency limits.
 - Serve the local dashboard with the application. Reuse the existing scoped human-decision endpoint and keep deployment authorization visibly unevaluated.
 - Run the Ledger Finch demo against an isolated ephemeral registry using the same gate. Keep comparative experiments and a secondary reviewer for Phase 4.
+- Reserve cumulative usage in the shared SQLite registry before provider calls. Charge reported usage when available and retain conservative reservations for estimates, unknown usage and interrupted calls.
+- Capture prompt content, adapter revision, effective inference settings and the reviewer configuration digest. Allow opt-in bounded raw output retention and label model confidence as uncalibrated.
+- Provide an explicit, billable smoke command over five synthetic scenarios. Keep live calls outside CI and require separate maintainer authorization.
